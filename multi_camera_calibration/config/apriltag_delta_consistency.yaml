@@ -1,14 +1,13 @@
 camera_a:
-  serial_no: "213622073198"
+  serial_no: ""
 
 camera_b:
-  serial_no: "213722070411"
+  serial_no: ""
 
 capture:
   width: 1280
   height: 720
   fps: 30
-  preview_width: 1280
   warmup_frames: 15
   startup_timeout: 20.0
   buffer_size: 30
@@ -18,11 +17,6 @@ intrinsics:
   camera_a: "../../multi_camera_calibration/config/camera_a_calibration_result.json"
   camera_b: "../../multi_camera_calibration/config/camera_b_calibration_result.json"
 
-extrinsics:
-  camera_a_from_camera_b: ""
-  result_file_name: "rgb_extrinsics_result.json"
-  enabled: false
-
 apriltag:
   family: "tag36h11"
   nthreads: 2
@@ -30,12 +24,13 @@ apriltag:
   quad_sigma: 0.0
   refine_edges: 1
   decode_sharpening: 0.25
-
-tracking:
-  tag_ids: [0, 1]
   tag_size_m: 0.04
   max_hamming: 0
 
-output:
-  output_root: "output"
-  session_name: ""
+compare:
+  tag_id: 0
+  print_interval_seconds: 3.0
+
+preview:
+  width: 1280
+  window_name: "AprilTag Delta Consistency Test"

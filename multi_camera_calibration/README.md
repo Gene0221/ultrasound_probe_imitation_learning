@@ -3,18 +3,18 @@
 This directory contains the non-ROS dual-D435i workflow for:
 
 - synchronized RGB pair capture
-- offline RGB extrinsics estimation
-- online AprilTag pose-delta tracking in camera A coordinates
+- online AprilTag pose-delta tracking with camera-A priority and camera-B fallback
 - single-camera AprilTag pose testing
+- dual-camera AprilTag delta consistency testing
 
 ## Entry Points
 
 ```bash
 python multi_camera_calibration/capture_two_d435i_rgb_pairs.py --list-devices
 python multi_camera_calibration/capture_two_d435i_rgb_pairs.py
-python multi_camera_calibration/estimate_rgb_extrinsics.py
 python multi_camera_calibration/track_apriltag_pose_deltas.py
 python multi_camera_calibration/test_apriltag_pose_single_camera.py
+python multi_camera_calibration/test_apriltag_delta_consistency_dual_camera.py
 ```
 
 ## Dependencies
@@ -30,9 +30,9 @@ You also need a working `librealsense` / `pyrealsense2` environment.
 ## Config Files
 
 - [config/capture.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/capture.yaml)
-- [config/extrinsics.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/extrinsics.yaml)
 - [config/apriltag_tracking.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/apriltag_tracking.yaml)
 - [config/apriltag_test.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/apriltag_test.yaml)
+- [config/apriltag_delta_consistency.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/apriltag_delta_consistency.yaml)
 
 ## RGB Capture
 
@@ -57,33 +57,14 @@ The capture config stores:
 - buffer size
 - maximum allowed timestamp delta
 
-## RGB Extrinsics
+## Deprecated
 
-`estimate_rgb_extrinsics.py` assumes:
+The old dual-camera RGB extrinsics workflow is kept under:
 
-- camera A RGB intrinsics are already calibrated
-- camera B RGB intrinsics are already calibrated
-- synchronized checkerboard RGB image pairs are already captured
+- [deprecated/estimate_rgb_extrinsics.py](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/deprecated/estimate_rgb_extrinsics.py)
+- [deprecated/config/extrinsics.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/deprecated/config/extrinsics.yaml)
 
-It estimates camera B in camera A coordinates and writes:
-
-- `<dataset_dir>/rgb_extrinsics_result.json`
-- `<dataset_dir>/rgb_extrinsics_result.yaml`
-
-The result includes:
-
-- per-pair board pose results
-- per-pair `transform_a_b`
-- averaged final `rotation_matrix_a_b`
-- averaged final `translation_vector_a_b`
-- `4x4` homogeneous transform
-- TF-style translation and quaternion output
-
-Session selection for extrinsics:
-
-- the script works on `output/<session_name>`
-- you can set `output.session_name` in [config/extrinsics.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/extrinsics.yaml)
-- if it is empty, the script prompts for `session_name` in the terminal
+They are no longer part of the main tracking workflow, but are retained for historical reference and possible later reuse.
 
 ## AprilTag Pose Deltas
 
@@ -93,19 +74,20 @@ Current behavior:
 
 - default AprilTag family is `tag36h11`
 - two D435i RGB streams run online
-- poses are unified into camera A coordinates
 - if both cameras see the tag, camera A is preferred
-- if camera A misses the tag and camera B sees it, the pose is transformed from B to A
+- if camera A misses the tag and camera B sees it, camera B is used directly
 - if neither camera sees the tag, that tag is marked missing for the current frame
 - each tracked tag is recorded independently
-- pose deltas are computed between adjacent valid frames
+- pose deltas are computed only when adjacent valid frames come from the same camera
+- if the preferred source switches between adjacent valid frames, that delta is skipped
 
 For each tracked tag, the output includes:
 
-- current `4x4` pose matrix in camera A coordinates
+- current `4x4` pose matrix in the current source-camera coordinates
 - adjacent-frame `4x4` delta transform
 - adjacent-frame translation delta
 - adjacent-frame rotation delta quaternion
+- current pose source camera and delta source camera
 
 Tracking outputs:
 
@@ -116,8 +98,8 @@ Session selection for tracking:
 
 - the script prompts for `session_name` if `output.session_name` is empty
 - it writes tracking logs into `output/<session_name>`
-- it loads the extrinsics result from `output/<session_name>/rgb_extrinsics_result.json` by default
-- you can still override the extrinsics path in [config/apriltag_tracking.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/multi_camera_calibration/config/apriltag_tracking.yaml) if needed
+- the current delta logic does not require extrinsics
+- the extrinsics workflow is still kept in the workspace for later rigid-body conversion and fusion work
 
 ## Single-Camera AprilTag Test
 
@@ -138,3 +120,16 @@ The preview window shows:
 - pose axes
 - translation `(x, y, z)` in meters
 - pose quaternion `(qx, qy, qz, qw)`
+
+## Dual-Camera Delta Consistency Test
+
+`test_apriltag_delta_consistency_dual_camera.py` is an online validation tool.
+
+It uses camera A and camera B to observe the same AprilTag, then:
+
+- computes adjacent-frame pose delta in camera A independently
+- computes adjacent-frame pose delta in camera B independently
+- compares the two delta transforms
+- prints translation and rotation error statistics to the terminal every 3 seconds
+
+This script does not write tracking logs to file.
