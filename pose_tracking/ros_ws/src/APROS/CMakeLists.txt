@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(APROS)
+project(apros)
 
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
@@ -33,7 +33,7 @@ include_directories(
 
 catkin_install_python(PROGRAMS
   scripts/pose_delta_bridge.py
-  DESTINATION ${catkin_PACKAGE_BIN_DESTINATION}
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 install(DIRECTORY

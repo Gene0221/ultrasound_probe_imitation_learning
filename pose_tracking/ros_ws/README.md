@@ -8,7 +8,7 @@ The heavy sensor access and pose estimation stay in:
 
 The ROS bridge package lives in:
 
-- `pose_tracking/ros_ws/src/APROS`
+- `pose_tracking/ros_ws/src/apros`
 
 ## Purpose
 
@@ -33,7 +33,7 @@ source devel/setup.bash
 ## Run
 
 ```bash
-roslaunch APROS pose_delta_bridge.launch
+roslaunch apros pose_delta_bridge.launch
 ```
 
 ## Topic
@@ -44,4 +44,4 @@ Default topic:
 
 Message type:
 
-- `APROS/ProbePoseDelta`
+- `apros/ProbePoseDelta`

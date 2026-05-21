@@ -14,7 +14,7 @@ from typing import Any
 import rospy
 from geometry_msgs.msg import Quaternion, Vector3
 
-from APROS.msg import ProbePoseDelta
+from apros.msg import ProbePoseDelta
 
 
 SCRIPT_PATH = Path(__file__).resolve()
@@ -171,4 +171,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

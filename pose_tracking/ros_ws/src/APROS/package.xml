@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>APROS</name>
+  <name>apros</name>
   <version>0.1.0</version>
   <description>Pose-delta ROS bridge for the pose_tracking workspace.</description>
 
@@ -25,3 +25,4 @@
 
   <export/>
 </package>
+

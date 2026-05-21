@@ -41,7 +41,7 @@ pose_tracking/
 
   ros_ws/
     src/
-      APROS/
+      apros/
 ```
 
 ## Vision
@@ -105,7 +105,7 @@ Current fusion utilities live in:
 The ROS workspace is part of tracking and lives in:
 
 - `pose_tracking/ros_ws`
-- `pose_tracking/ros_ws/src/APROS`
+- `pose_tracking/ros_ws/src/apros`
 
 ## Deprecated
 

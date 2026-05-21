@@ -9,7 +9,7 @@
   <arg name="restart_on_exit" default="false" />
   <arg name="respawn_delay_s" default="1.0" />
 
-  <node pkg="APROS" type="pose_delta_bridge.py" name="pose_delta_bridge" output="screen">
+  <node pkg="apros" type="pose_delta_bridge.py" name="pose_delta_bridge" output="screen">
     <param name="source" value="$(arg source)" />
     <param name="topic_name" value="$(arg topic_name)" />
     <param name="frame_id" value="$(arg frame_id)" />
