@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 import threading
 import time
 from collections import deque
@@ -51,6 +52,15 @@ class DetectionPose:
     corners_xy: np.ndarray
     decision_margin: float
     hamming: int
+
+
+@dataclass
+class SelectedPoseState:
+    source_camera: str
+    transform_camera_tag: np.ndarray
+    frame_number: int
+    host_timestamp_s: float
+    device_timestamp_ms: float
 
 
 class FrameBuffer:
@@ -121,7 +131,7 @@ class CameraWorker(threading.Thread):
                     FrameRecord(
                         image=np.asanyarray(color_frame.get_data()).copy(),
                         device_timestamp_ms=float(color_frame.get_timestamp()),
-                        host_timestamp_s=time.perf_counter(),
+                        host_timestamp_s=capture_host_timestamp_s(),
                         frame_number=int(color_frame.get_frame_number()),
                         camera_label=self.camera_label,
                     )
@@ -164,6 +174,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to YAML config file.")
     parser.add_argument("--list-devices", action="store_true", help="Only list detected RealSense devices and exit.")
+    parser.add_argument("--disable-jsonl", action="store_true", help="Disable JSONL and summary outputs.")
+    parser.add_argument("--emit-stdout-records", action="store_true", help="Emit valid pose-delta records to stdout as JSON lines.")
     return parser.parse_args()
 
 
@@ -192,8 +204,8 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return load_yaml_or_json(config_path)
 
 
-def prompt_session_name() -> str:
-    return input("Enter session name: ").strip()
+def capture_host_timestamp_s() -> float:
+    return time.time()
 
 
 def parse_intrinsics_payload(payload: dict[str, Any], file_path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -331,6 +343,18 @@ def choose_preferred_pose(
     return detections_b.get(tag_id)
 
 
+def frame_for_detection_source(
+    source_camera: str,
+    frame_a: FrameRecord,
+    frame_b: Optional[FrameRecord],
+) -> Optional[FrameRecord]:
+    if source_camera == "A":
+        return frame_a
+    if source_camera == "B":
+        return frame_b
+    return None
+
+
 def resize_to_width(image: np.ndarray, width: int) -> np.ndarray:
     scale = width / image.shape[1]
     height = max(1, int(image.shape[0] * scale))
@@ -385,12 +409,11 @@ def build_preview(
     return preview
 
 
-def prepare_output_paths(output_root: Path, session_name: str) -> tuple[Path, Path, Path]:
-    session_dir = output_root / session_name
-    session_dir.mkdir(parents=True, exist_ok=True)
-    jsonl_path = session_dir / "tag_pose_deltas.jsonl"
-    summary_path = session_dir / "tracking_summary.json"
-    return session_dir, jsonl_path, summary_path
+def prepare_output_paths(output_root: Path) -> tuple[Path, Path]:
+    output_root.mkdir(parents=True, exist_ok=True)
+    jsonl_path = output_root / "tag_pose_deltas.jsonl"
+    summary_path = output_root / "tracking_summary.json"
+    return jsonl_path, summary_path
 
 
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
@@ -444,14 +467,15 @@ def main() -> None:
         raise ValueError("tracking.tag_size_m must be positive.")
     allowed_hamming = int(tracking_cfg.get("max_hamming", 0))
 
+    write_jsonl = bool(output_cfg.get("write_jsonl", True)) and not args.disable_jsonl
+    emit_stdout_records = bool(output_cfg.get("emit_stdout_records", False)) or args.emit_stdout_records
+    log_stream = sys.stderr if emit_stdout_records else sys.stdout
     output_root_value = str(output_cfg.get("output_root", str(DEFAULT_OUTPUT_ROOT)))
     output_root = resolve_path(output_root_value, PROJECT_ROOT)
-    session_name = str(output_cfg.get("session_name", "")).strip()
-    if not session_name:
-        session_name = prompt_session_name()
-    if not session_name:
-        raise ValueError("session name is required.")
-    session_dir, jsonl_path, summary_path = prepare_output_paths(output_root, session_name)
+    jsonl_path: Optional[Path] = None
+    summary_path: Optional[Path] = None
+    if write_jsonl:
+        jsonl_path, summary_path = prepare_output_paths(output_root)
 
     intrinsics_cfg = config.get("intrinsics", {})
     camera_a_intrinsics_path, camera_matrix_a, _ = load_intrinsics(str(intrinsics_cfg.get("camera_a", "")), config_path.parent)
@@ -466,18 +490,23 @@ def main() -> None:
     worker_a.wait_until_started(startup_timeout)
     worker_b.wait_until_started(startup_timeout)
 
-    print(f"[INFO] Camera A serial: {serial_a}")
-    print(f"[INFO] Camera B serial: {serial_b}")
-    print(f"[INFO] Session directory: {session_dir}")
-    print(f"[INFO] JSONL output: {jsonl_path}")
-    print(f"[INFO] Intrinsics A: {camera_a_intrinsics_path}")
-    print(f"[INFO] Intrinsics B: {camera_b_intrinsics_path}")
-    print(f"[INFO] Tracking tag ids: {sorted(tracked_tag_ids)}")
-    print("[INFO] Press Q in the preview window to quit.")
+    print(f"[INFO] Camera A serial: {serial_a}", file=log_stream)
+    print(f"[INFO] Camera B serial: {serial_b}", file=log_stream)
+    if write_jsonl and jsonl_path is not None:
+        print(f"[INFO] Output directory: {output_root}", file=log_stream)
+        print(f"[INFO] JSONL output: {jsonl_path}", file=log_stream)
+    else:
+        print("[INFO] JSONL logging disabled by config.", file=log_stream)
+    if emit_stdout_records:
+        print("[INFO] Stdout pose-delta streaming enabled.", file=log_stream)
+    print(f"[INFO] Intrinsics A: {camera_a_intrinsics_path}", file=log_stream)
+    print(f"[INFO] Intrinsics B: {camera_b_intrinsics_path}", file=log_stream)
+    print(f"[INFO] Tracking tag ids: {sorted(tracked_tag_ids)}", file=log_stream)
+    print("[INFO] Press Q in the preview window to quit.", file=log_stream)
 
-    previous_states: dict[int, Optional[tuple[str, np.ndarray]]] = {tag_id: None for tag_id in tracked_tag_ids}
+    previous_states: dict[int, Optional[SelectedPoseState]] = {tag_id: None for tag_id in tracked_tag_ids}
     last_processed_frame_a: Optional[int] = None
-    frames_written = 0
+    records_logged = 0
     valid_delta_counts: dict[int, int] = {tag_id: 0 for tag_id in tracked_tag_ids}
     window_name = "Dual D435i AprilTag Tracking"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -504,17 +533,6 @@ def main() -> None:
             if frame_b is not None and sync_delta_ms is not None and sync_delta_ms <= sync_max_delta_ms:
                 detections_b = detect_tag_poses(detector, frame_b, camera_matrix_b, tag_size_m, tracked_tag_ids, allowed_hamming)
 
-            record: dict[str, Any] = {
-                "frame_a_number": frame_a.frame_number,
-                "frame_a_host_timestamp_s": frame_a.host_timestamp_s,
-                "frame_a_device_timestamp_ms": frame_a.device_timestamp_ms,
-                "frame_b_number": frame_b.frame_number if frame_b is not None else None,
-                "frame_b_host_timestamp_s": frame_b.host_timestamp_s if frame_b is not None else None,
-                "frame_b_device_timestamp_ms": frame_b.device_timestamp_ms if frame_b is not None else None,
-                "sync_delta_ms": sync_delta_ms,
-                "tags": {},
-            }
-
             status_lines = [
                 f"frame_a={frame_a.frame_number}",
                 f"sync_delta_ms={'N/A' if sync_delta_ms is None else f'{sync_delta_ms:.2f}'}",
@@ -522,55 +540,60 @@ def main() -> None:
 
             for tag_id in sorted(tracked_tag_ids):
                 current_pose = choose_preferred_pose(tag_id, detections_a, detections_b)
-                tag_entry: dict[str, Any] = {"visible": current_pose is not None}
                 if current_pose is None:
                     previous_states[tag_id] = None
-                    tag_entry["status"] = "missing"
-                    record["tags"][str(tag_id)] = tag_entry
                     status_lines.append(f"tag {tag_id}: missing")
                     continue
 
+                selected_frame = frame_for_detection_source(current_pose.source_camera, frame_a, frame_b)
+                if selected_frame is None:
+                    previous_states[tag_id] = None
+                    status_lines.append(f"tag {tag_id}: missing source frame")
+                    continue
+
                 transform_camera_tag = current_pose.transform_camera_tag
-                tag_entry["status"] = "tracked"
-                tag_entry["source_camera"] = current_pose.source_camera
-                tag_entry["transform_camera_tag"] = transform_camera_tag.tolist()
-                tag_entry["translation_xyz"] = transform_camera_tag[:3, 3].tolist()
-                tag_entry["quaternion_xyzw"] = rotation_matrix_to_quaternion(transform_camera_tag[:3, :3]).tolist()
+                current_state = SelectedPoseState(
+                    source_camera=current_pose.source_camera,
+                    transform_camera_tag=transform_camera_tag,
+                    frame_number=selected_frame.frame_number,
+                    host_timestamp_s=selected_frame.host_timestamp_s,
+                    device_timestamp_ms=selected_frame.device_timestamp_ms,
+                )
 
                 previous_state = previous_states[tag_id]
-                if previous_state is not None and previous_state[0] == current_pose.source_camera:
-                    _, previous_transform = previous_state
-                    delta_transform = invert_transform(previous_transform) @ transform_camera_tag
+                if previous_state is not None and previous_state.source_camera == current_state.source_camera:
+                    delta_transform = invert_transform(previous_state.transform_camera_tag) @ transform_camera_tag
                     delta_quaternion = rotation_matrix_to_quaternion(delta_transform[:3, :3])
-                    tag_entry["delta_transform_prev_to_curr"] = delta_transform.tolist()
-                    tag_entry["delta_translation_xyz"] = delta_transform[:3, 3].tolist()
-                    tag_entry["delta_quaternion_xyzw"] = delta_quaternion.tolist()
-                    tag_entry["delta_source_camera"] = current_pose.source_camera
+                    delta_record: dict[str, Any] = {
+                        "tag_id": tag_id,
+                        "valid": True,
+                        "prev_frame_number": previous_state.frame_number,
+                        "prev_host_timestamp_s": previous_state.host_timestamp_s,
+                        "prev_device_timestamp_ms": previous_state.device_timestamp_ms,
+                        "curr_frame_number": current_state.frame_number,
+                        "curr_host_timestamp_s": current_state.host_timestamp_s,
+                        "curr_device_timestamp_ms": current_state.device_timestamp_ms,
+                        "delta_transform_prev_to_curr": delta_transform.tolist(),
+                        "delta_translation_xyz": delta_transform[:3, 3].tolist(),
+                        "delta_quaternion_xyzw": delta_quaternion.tolist(),
+                    }
+                    if write_jsonl and jsonl_path is not None:
+                        append_jsonl(jsonl_path, delta_record)
+                        records_logged += 1
+                    if emit_stdout_records:
+                        print(json.dumps(delta_record), flush=True)
                     valid_delta_counts[tag_id] += 1
                     status_lines.append(
                         f"tag {tag_id}: {current_pose.source_camera} d=({delta_transform[0,3]:.4f}, {delta_transform[1,3]:.4f}, {delta_transform[2,3]:.4f})"
                     )
                 elif previous_state is not None:
-                    previous_source, _ = previous_state
-                    tag_entry["status"] = "source_switched"
-                    tag_entry["previous_source_camera"] = previous_source
-                    tag_entry["delta_transform_prev_to_curr"] = None
-                    tag_entry["delta_translation_xyz"] = None
-                    tag_entry["delta_quaternion_xyzw"] = None
-                    tag_entry["delta_source_camera"] = None
-                    status_lines.append(f"tag {tag_id}: source switch {previous_source}->{current_pose.source_camera}, delta skipped")
+                    status_lines.append(
+                        f"tag {tag_id}: source switch {previous_state.source_camera}->{current_pose.source_camera}, delta skipped"
+                    )
                 else:
-                    tag_entry["delta_transform_prev_to_curr"] = None
-                    tag_entry["delta_translation_xyz"] = None
-                    tag_entry["delta_quaternion_xyzw"] = None
-                    tag_entry["delta_source_camera"] = None
                     status_lines.append(f"tag {tag_id}: {current_pose.source_camera} initialized")
 
-                previous_states[tag_id] = (current_pose.source_camera, transform_camera_tag)
-                record["tags"][str(tag_id)] = tag_entry
-
-            append_jsonl(jsonl_path, record)
-            frames_written += 1
+                previous_states[tag_id] = current_state
 
             preview = build_preview(frame_a, frame_b, detections_a, detections_b, preview_width, status_lines[:8])
             cv2.imshow(window_name, preview)
@@ -583,23 +606,22 @@ def main() -> None:
         worker_b.join(timeout=5)
         cv2.destroyAllWindows()
 
-        summary = {
-            "session_name": session_name,
-            "output_root": str(output_root),
-            "session_dir": str(session_dir),
-            "jsonl_path": str(jsonl_path),
-            "camera_a_serial_no": serial_a,
-            "camera_b_serial_no": serial_b,
-            "camera_a_intrinsics_file": str(camera_a_intrinsics_path),
-            "camera_b_intrinsics_file": str(camera_b_intrinsics_path),
-            "tag_ids": sorted(tracked_tag_ids),
-            "tag_size_m": tag_size_m,
-            "frames_written": frames_written,
-            "tracking_mode": "prefer_camera_a_fallback_camera_b_skip_cross_camera_delta",
-            "valid_delta_counts": {str(k): v for k, v in valid_delta_counts.items()},
-        }
-        summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        print(f"[DONE] Tracking summary written to: {summary_path}")
+        if write_jsonl and summary_path is not None and jsonl_path is not None:
+            summary = {
+                "output_root": str(output_root),
+                "jsonl_path": str(jsonl_path),
+                "camera_a_serial_no": serial_a,
+                "camera_b_serial_no": serial_b,
+                "camera_a_intrinsics_file": str(camera_a_intrinsics_path),
+                "camera_b_intrinsics_file": str(camera_b_intrinsics_path),
+                "tag_ids": sorted(tracked_tag_ids),
+                "tag_size_m": tag_size_m,
+                "records_logged": records_logged,
+                "tracking_mode": "prefer_camera_a_fallback_camera_b_skip_cross_camera_delta",
+                "valid_delta_counts": {str(k): v for k, v in valid_delta_counts.items()},
+            }
+            summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+            print(f"[DONE] Tracking summary written to: {summary_path}", file=log_stream)
 
 
 if __name__ == "__main__":

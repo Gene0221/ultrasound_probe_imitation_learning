@@ -38,4 +38,5 @@ tracking:
 
 output:
   output_root: "data/vision/output"
-  session_name: ""
+  write_jsonl: true
+  emit_stdout_records: false

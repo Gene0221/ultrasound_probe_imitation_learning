@@ -1,0 +1,10 @@
+source: "vision"
+topic_name: "/probe_pose_delta"
+frame_id: "probe"
+python_executable: ""
+vision_script: ""
+vision_config: ""
+fusion_command: ""
+restart_on_exit: false
+respawn_delay_s: 1.0
+

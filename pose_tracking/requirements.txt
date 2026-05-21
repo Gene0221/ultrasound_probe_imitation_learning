@@ -3,3 +3,8 @@ opencv-python
 PyYAML
 pyrealsense2
 pupil-apriltags
+scipy
+pygame
+PyOpenGL
+PyOpenGL_accelerate
+matplotlib

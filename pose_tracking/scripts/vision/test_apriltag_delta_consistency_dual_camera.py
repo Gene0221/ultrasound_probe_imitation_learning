@@ -131,7 +131,7 @@ class CameraWorker(threading.Thread):
                     FrameRecord(
                         image=np.asanyarray(color_frame.get_data()).copy(),
                         device_timestamp_ms=float(color_frame.get_timestamp()),
-                        host_timestamp_s=time.perf_counter(),
+                        host_timestamp_s=time.time(),
                         frame_number=int(color_frame.get_frame_number()),
                         camera_label=self.camera_label,
                     )

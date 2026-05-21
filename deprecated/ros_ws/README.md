@@ -102,7 +102,7 @@ If your machine and USB setup are stable, you can override them from the launch 
 
 Edit the topic names and output directory in:
 
-[`src/two_camera_rgb_extrinsic/config/default.yaml`](C:/Users/zhj80/OneDrive/Desktop/Master Course Material/research/data_collection/ros_ws/src/two_camera_rgb_extrinsic/config/default.yaml)
+`deprecated/ros_ws/src/two_camera_rgb_extrinsic/config/default.yaml`
 
 The capture node is optimized to keep ROS subscription responsive:
 

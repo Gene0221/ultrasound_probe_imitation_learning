@@ -98,7 +98,7 @@ class CameraWorker(threading.Thread):
                 record = FrameRecord(
                     image=np.asanyarray(color_frame.get_data()).copy(),
                     device_timestamp_ms=float(color_frame.get_timestamp()),
-                    host_timestamp_s=time.perf_counter(),
+                    host_timestamp_s=time.time(),
                     frame_number=int(color_frame.get_frame_number()),
                 )
                 with self._lock:
