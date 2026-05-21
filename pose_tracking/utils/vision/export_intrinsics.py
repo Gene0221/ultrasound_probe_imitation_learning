@@ -3,6 +3,11 @@ from pathlib import Path
 import pyrealsense2 as rs
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+DEFAULT_INTRINSICS_DIR = PROJECT_ROOT / "config" / "vision" / "intrinsics"
+
+
 def export_rgb_intrinsics(serial, output_path, width=1280, height=720, fps=30):
     pipeline = rs.pipeline()
     config = rs.config()
@@ -44,6 +49,5 @@ def export_rgb_intrinsics(serial, output_path, width=1280, height=720, fps=30):
     finally:
         pipeline.stop()
 
-
-export_rgb_intrinsics("213622073198", "config/camera_a_rgb_intrinsics.json")
-export_rgb_intrinsics("213722070411", "config/camera_b_rgb_intrinsics.json")
+export_rgb_intrinsics("213622073198", DEFAULT_INTRINSICS_DIR / "camera_a_calibration_result.json")
+export_rgb_intrinsics("213722070411", DEFAULT_INTRINSICS_DIR / "camera_b_calibration_result.json")

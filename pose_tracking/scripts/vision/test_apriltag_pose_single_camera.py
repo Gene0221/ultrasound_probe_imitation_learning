@@ -29,7 +29,8 @@ except ImportError as exc:  # pragma: no cover
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG_PATH = SCRIPT_DIR / "config" / "apriltag_test.yaml"
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "vision" / "apriltag_test.yaml"
 
 
 @dataclass
@@ -151,7 +152,7 @@ def resolve_path(path_value: str | Path, base_dir: Optional[Path] = None) -> Pat
     path = Path(path_value)
     if path.is_absolute():
         return path.resolve()
-    root = base_dir if base_dir is not None else SCRIPT_DIR
+    root = base_dir if base_dir is not None else PROJECT_ROOT
     return (root / path).resolve()
 
 

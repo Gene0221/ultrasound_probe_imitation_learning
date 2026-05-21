@@ -7,7 +7,7 @@ camera:
   startup_timeout: 20.0
 
 intrinsics:
-  camera: "../../multi_camera_calibration/config/camera_a_calibration_result.json"
+  camera: "intrinsics/camera_a_calibration_result.json"
 
 apriltag:
   family: "tag36h11"
