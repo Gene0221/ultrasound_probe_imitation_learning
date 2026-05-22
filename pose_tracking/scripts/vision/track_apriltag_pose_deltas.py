@@ -34,6 +34,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "vision" / "apriltag_tracking.yaml"
 DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "vision" / "output"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from utils.vision.export_intrinsics import export_rgb_intrinsics
 @dataclass
 class FrameRecord:
     image: np.ndarray
@@ -225,6 +229,42 @@ def load_intrinsics(path_value: str | Path, base_dir: Path) -> tuple[Path, np.nd
     payload = load_yaml_or_json(path)
     camera_matrix, dist_coeffs = parse_intrinsics_payload(payload, path)
     return path, camera_matrix, dist_coeffs
+
+
+def ensure_connected_cameras(serial_numbers: list[str]) -> None:
+    connected_serials = {device["serial_no"] for device in list_realsense_devices()}
+    missing_serials = [serial_no for serial_no in serial_numbers if serial_no not in connected_serials]
+    if missing_serials:
+        raise SystemExit(
+            "Required RealSense cameras are not connected for intrinsics export: "
+            + ", ".join(missing_serials)
+        )
+
+
+def ensure_dual_camera_intrinsics(
+    serial_a: str,
+    serial_b: str,
+    intrinsics_cfg: dict[str, Any],
+    base_dir: Path,
+    width: int,
+    height: int,
+    fps: int,
+    log_stream: Any,
+) -> tuple[Path, Path]:
+    camera_a_path = resolve_path(str(intrinsics_cfg.get("camera_a", "")), base_dir)
+    camera_b_path = resolve_path(str(intrinsics_cfg.get("camera_b", "")), base_dir)
+    missing_paths = [path for path in (camera_a_path, camera_b_path) if not path.exists()]
+    if not missing_paths:
+        return camera_a_path, camera_b_path
+
+    ensure_connected_cameras([serial_a, serial_b])
+    if not camera_a_path.exists():
+        print(f"[INFO] Intrinsics file not found. Exporting: {camera_a_path}", file=log_stream)
+        export_rgb_intrinsics(serial_a, camera_a_path, width=width, height=height, fps=fps)
+    if not camera_b_path.exists():
+        print(f"[INFO] Intrinsics file not found. Exporting: {camera_b_path}", file=log_stream)
+        export_rgb_intrinsics(serial_b, camera_b_path, width=width, height=height, fps=fps)
+    return camera_a_path, camera_b_path
 
 
 def rotation_matrix_to_quaternion(rotation_matrix: np.ndarray) -> np.ndarray:
@@ -477,9 +517,32 @@ def main() -> None:
     if write_jsonl:
         jsonl_path, summary_path = prepare_output_paths(output_root)
 
+    print(f"[INFO] Camera A serial: {serial_a}", file=log_stream)
+    print(f"[INFO] Camera B serial: {serial_b}", file=log_stream)
+    if write_jsonl and jsonl_path is not None:
+        print(f"[INFO] Output directory: {output_root}", file=log_stream)
+        print(f"[INFO] JSONL output: {jsonl_path}", file=log_stream)
+    else:
+        print("[INFO] JSONL logging disabled by config.", file=log_stream)
+    if emit_stdout_records:
+        print("[INFO] Stdout pose-delta streaming enabled.", file=log_stream)
+    print(f"[INFO] Tracking tag ids: {sorted(tracked_tag_ids)}", file=log_stream)
+
     intrinsics_cfg = config.get("intrinsics", {})
-    camera_a_intrinsics_path, camera_matrix_a, _ = load_intrinsics(str(intrinsics_cfg.get("camera_a", "")), config_path.parent)
-    camera_b_intrinsics_path, camera_matrix_b, _ = load_intrinsics(str(intrinsics_cfg.get("camera_b", "")), config_path.parent)
+    camera_a_intrinsics_path, camera_b_intrinsics_path = ensure_dual_camera_intrinsics(
+        serial_a,
+        serial_b,
+        intrinsics_cfg,
+        config_path.parent,
+        width,
+        height,
+        fps,
+        log_stream,
+    )
+    camera_a_intrinsics_path, camera_matrix_a, _ = load_intrinsics(camera_a_intrinsics_path, config_path.parent)
+    camera_b_intrinsics_path, camera_matrix_b, _ = load_intrinsics(camera_b_intrinsics_path, config_path.parent)
+    print(f"[INFO] Intrinsics A: {camera_a_intrinsics_path}", file=log_stream)
+    print(f"[INFO] Intrinsics B: {camera_b_intrinsics_path}", file=log_stream)
 
     detector = build_detector(detector_cfg)
 
@@ -490,18 +553,6 @@ def main() -> None:
     worker_a.wait_until_started(startup_timeout)
     worker_b.wait_until_started(startup_timeout)
 
-    print(f"[INFO] Camera A serial: {serial_a}", file=log_stream)
-    print(f"[INFO] Camera B serial: {serial_b}", file=log_stream)
-    if write_jsonl and jsonl_path is not None:
-        print(f"[INFO] Output directory: {output_root}", file=log_stream)
-        print(f"[INFO] JSONL output: {jsonl_path}", file=log_stream)
-    else:
-        print("[INFO] JSONL logging disabled by config.", file=log_stream)
-    if emit_stdout_records:
-        print("[INFO] Stdout pose-delta streaming enabled.", file=log_stream)
-    print(f"[INFO] Intrinsics A: {camera_a_intrinsics_path}", file=log_stream)
-    print(f"[INFO] Intrinsics B: {camera_b_intrinsics_path}", file=log_stream)
-    print(f"[INFO] Tracking tag ids: {sorted(tracked_tag_ids)}", file=log_stream)
     print("[INFO] Press Q in the preview window to quit.", file=log_stream)
 
     previous_states: dict[int, Optional[SelectedPoseState]] = {tag_id: None for tag_id in tracked_tag_ids}

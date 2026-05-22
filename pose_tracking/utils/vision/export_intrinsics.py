@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+
 import pyrealsense2 as rs
 
 
@@ -49,5 +50,31 @@ def export_rgb_intrinsics(serial, output_path, width=1280, height=720, fps=30):
     finally:
         pipeline.stop()
 
-export_rgb_intrinsics("213622073198", DEFAULT_INTRINSICS_DIR / "camera_a_calibration_result.json")
-export_rgb_intrinsics("213722070411", DEFAULT_INTRINSICS_DIR / "camera_b_calibration_result.json")
+
+def export_default_pair_intrinsics(
+    camera_a_serial="213622073198",
+    camera_b_serial="337122072369",
+    intrinsics_dir=DEFAULT_INTRINSICS_DIR,
+    width=1280,
+    height=720,
+    fps=30,
+):
+    intrinsics_dir = Path(intrinsics_dir)
+    export_rgb_intrinsics(
+        camera_a_serial,
+        intrinsics_dir / "camera_a_calibration_result.json",
+        width=width,
+        height=height,
+        fps=fps,
+    )
+    export_rgb_intrinsics(
+        camera_b_serial,
+        intrinsics_dir / "camera_b_calibration_result.json",
+        width=width,
+        height=height,
+        fps=fps,
+    )
+
+
+if __name__ == "__main__":
+    export_default_pair_intrinsics()
