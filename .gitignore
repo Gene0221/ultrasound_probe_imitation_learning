@@ -1,0 +1,83 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Python cache / build
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+site/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+
+# Local configuration / secrets
+.env
+.env.*
+*.local
+
+# ML / experiment artifacts
+checkpoints/
+ckpts/
+runs/
+wandb/
+mlruns/
+outputs/
+results/
+artifacts/
+tensorboard/
+events.out.tfevents*
+
+# Large model / array files
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pkl
+*.joblib
+
+# Archives / backups
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.bundle
+
+# Common dataset directories
+data/
+datasets/
+
+# Keep repository structure files if needed
+!**/data/.gitkeep
+!**/datasets/.gitkeep
