@@ -1,0 +1,16 @@
+{
+  "use_force": true,
+  "force_dim": 6,
+  "trajectories": [
+    {
+      "trajectory_id": "val_traj_000",
+      "root_dir": "trajectories/val_traj_000",
+      "metadata_path": "trajectories/val_traj_000/metadata.json"
+    },
+    {
+      "trajectory_id": "val_traj_001",
+      "root_dir": "trajectories/val_traj_001",
+      "metadata_path": "trajectories/val_traj_001/metadata.json"
+    }
+  ]
+}
