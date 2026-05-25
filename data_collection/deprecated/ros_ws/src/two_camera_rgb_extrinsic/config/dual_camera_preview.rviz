@@ -1,0 +1,53 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Enabled: true
+      Name: Grid
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_a/color/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Camera A RGB
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_b/color/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Camera B RGB
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: camera_a_color_optical_frame
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 4
+      Focal Point: 0; 0; 0
+      Name: Current View
+      Pitch: 0.785
+      Yaw: 0.785
+Window Geometry:
+  Height: 900
+  Width: 1600

@@ -1,0 +1,22 @@
+dataset:
+  output_dir: imitation_learing_v1/data/real_dataset
+  manifests_dir: manifests
+  trajectories_dir: trajectories
+  use_force: true
+  force_dim: 6
+
+alignment:
+  max_pose_force_dt_s: 0.05
+  max_pose_image_dt_s: 0.05
+
+trajectories:
+  - trajectory_id: traj_0001
+    split: train
+    pose:
+      path: data_collection/pose_tracking/data/camera/output/tag_pose_deltas.jsonl
+    force:
+      path: data_collection/force_tracking/data/output/force_records.jsonl
+    ultrasound:
+      images_dir: data_collection/ultrasound/data/images
+      timestamps_path: data_collection/ultrasound/data/timestamps.jsonl
+

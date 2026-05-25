@@ -1,0 +1,98 @@
+project:
+  raw_root: ./data/raw
+  output_root: ./data/output
+
+board:
+  type: chessboard
+  pattern_size: [9, 6]
+  square_size_mm: 24.0
+
+corner_detection:
+  use_find_chessboard_sb: true
+  adaptive_thresh: true
+  normalize_image: true
+  fast_check: false
+  subpix:
+    enabled: true
+    win_size: [11, 11]
+    zero_zone: [-1, -1]
+    criteria:
+      max_iter: 30
+      epsilon: 0.001
+
+capture:
+  default_session_name: d435i_session
+  target_frame_count: 30
+  warmup_frames: 15
+  image_extension: .png
+  streams:
+    color:
+      width: 1920
+      height: 1080
+      fps: 30
+    infrared:
+      width: 1280
+      height: 720
+      fps: 30
+
+mono_calibration:
+  min_images: 10
+  save_visualizations: true
+  visualization_dirname: corners_vis
+  undistort_alpha: 0.0
+
+stereo_calibration:
+  min_pairs: 10
+  save_visualizations: true
+  visualization_dirname: corners_vis
+  rectify_alpha: 0.0
+  criteria:
+    max_iter: 100
+    epsilon: 0.00001
+
+undistort:
+  crop_to_roi: true
+  save_side_by_side: true
+  output_dirname: undistorted
+  image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"]
+
+sensors:
+  rgb:
+    enabled: true
+    description: D435i RGB camera
+    dirname: rgb
+    image_pattern: "rgb_*.png"
+
+  ir_left:
+    enabled: true
+    description: D435i left infrared camera
+    dirname: ir_left
+    image_pattern: "ir_left_*.png"
+
+  ir_right:
+    enabled: true
+    description: D435i right infrared camera
+    dirname: ir_right
+    image_pattern: "ir_right_*.png"
+
+pairs:
+  ir_stereo:
+    left_sensor_id: ir_left
+    right_sensor_id: ir_right
+    output_dirname: stereo_ir
+    result_filename: stereo_calibration_result.json
+    compute_rectification: true
+
+  rgb_to_ir_left:
+    left_sensor_id: rgb
+    right_sensor_id: ir_left
+    output_dirname: extrinsics
+    result_filename: rgb_to_ir_left.json
+    compute_rectification: false
+
+reference_frames:
+  primary_sensor: ir_left
+
+bundle:
+  output_dirname: bundle
+  filename: device_calibration_bundle.json

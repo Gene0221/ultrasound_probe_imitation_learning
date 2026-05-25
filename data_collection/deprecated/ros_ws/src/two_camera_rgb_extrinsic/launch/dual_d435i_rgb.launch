@@ -1,0 +1,27 @@
+<launch>
+  <arg name="serial_no_camera_a" default="" />
+  <arg name="serial_no_camera_b" default="" />
+  <arg name="camera_name_a" default="camera_a" />
+  <arg name="camera_name_b" default="camera_b" />
+  <arg name="color_width" default="1280" />
+  <arg name="color_height" default="720" />
+  <arg name="color_fps" default="15" />
+  <arg name="startup_timeout_seconds" default="20.0" />
+  <arg name="inter_camera_delay_seconds" default="2.0" />
+  <arg name="launch_rviz" default="true" />
+  <arg name="rviz_config" default="$(find two_camera_rgb_extrinsic)/config/dual_camera_preview.rviz" />
+
+  <node pkg="two_camera_rgb_extrinsic" type="launch_dual_d435i_rgb.py" name="launch_dual_d435i_rgb" output="screen">
+    <param name="serial_no_camera_a" value="$(arg serial_no_camera_a)" />
+    <param name="serial_no_camera_b" value="$(arg serial_no_camera_b)" />
+    <param name="camera_name_a" value="$(arg camera_name_a)" />
+    <param name="camera_name_b" value="$(arg camera_name_b)" />
+    <param name="color_width" value="$(arg color_width)" />
+    <param name="color_height" value="$(arg color_height)" />
+    <param name="color_fps" value="$(arg color_fps)" />
+    <param name="startup_timeout_seconds" value="$(arg startup_timeout_seconds)" />
+    <param name="inter_camera_delay_seconds" value="$(arg inter_camera_delay_seconds)" />
+  </node>
+
+  <node if="$(arg launch_rviz)" pkg="rviz" type="rviz" name="dual_camera_preview_rviz" args="-d $(arg rviz_config)" output="screen" />
+</launch>

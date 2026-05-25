@@ -1,0 +1,36 @@
+<launch>
+  <arg name="serial_no_camera_a" default="" />
+  <arg name="serial_no_camera_b" default="" />
+  <arg name="camera_name_a" default="camera_a" />
+  <arg name="camera_name_b" default="camera_b" />
+  <arg name="color_width" default="1280" />
+  <arg name="color_height" default="720" />
+  <arg name="color_fps" default="15" />
+
+  <arg name="session_name" default="sample_session" />
+  <arg name="output_root" default="/tmp/two_camera_rgb_extrinsic" />
+  <arg name="slop_seconds" default="0.03" />
+  <arg name="queue_size" default="5" />
+  <arg name="launch_rviz" default="false" />
+
+  <include file="$(find two_camera_rgb_extrinsic)/launch/dual_d435i_rgb.launch">
+    <arg name="serial_no_camera_a" value="$(arg serial_no_camera_a)" />
+    <arg name="serial_no_camera_b" value="$(arg serial_no_camera_b)" />
+    <arg name="camera_name_a" value="$(arg camera_name_a)" />
+    <arg name="camera_name_b" value="$(arg camera_name_b)" />
+    <arg name="color_width" value="$(arg color_width)" />
+    <arg name="color_height" value="$(arg color_height)" />
+    <arg name="color_fps" value="$(arg color_fps)" />
+    <arg name="launch_rviz" value="$(arg launch_rviz)" />
+  </include>
+
+  <node pkg="two_camera_rgb_extrinsic" type="capture_rgb_pairs_node" name="capture_rgb_pairs" output="screen">
+    <param name="camera_a/image_topic" value="/$(arg camera_name_a)/color/image_raw" />
+    <param name="camera_b/image_topic" value="/$(arg camera_name_b)/color/image_raw" />
+    <param name="capture/session_name" value="$(arg session_name)" />
+    <param name="capture/output_root" value="$(arg output_root)" />
+    <param name="synchronization/slop_seconds" value="$(arg slop_seconds)" />
+    <param name="synchronization/queue_size" value="$(arg queue_size)" />
+    <param name="capture/preview_only" value="false" />
+  </node>
+</launch>

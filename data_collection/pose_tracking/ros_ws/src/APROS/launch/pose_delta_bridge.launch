@@ -1,0 +1,24 @@
+<launch>
+  <arg name="source" default="vision" />
+  <arg name="topic_name" default="/probe_pose_delta" />
+  <arg name="frame_id" default="probe" />
+  <arg name="python_executable" default="" />
+  <arg name="vision_script" default="" />
+  <arg name="vision_config" default="" />
+  <arg name="fusion_command" default="" />
+  <arg name="restart_on_exit" default="false" />
+  <arg name="respawn_delay_s" default="1.0" />
+
+  <node pkg="apros" type="pose_delta_bridge.py" name="pose_delta_bridge" output="screen">
+    <param name="source" value="$(arg source)" />
+    <param name="topic_name" value="$(arg topic_name)" />
+    <param name="frame_id" value="$(arg frame_id)" />
+    <param name="python_executable" value="$(arg python_executable)" />
+    <param name="vision_script" value="$(arg vision_script)" />
+    <param name="vision_config" value="$(arg vision_config)" />
+    <param name="fusion_command" value="$(arg fusion_command)" />
+    <param name="restart_on_exit" value="$(arg restart_on_exit)" />
+    <param name="respawn_delay_s" value="$(arg respawn_delay_s)" />
+  </node>
+</launch>
+
