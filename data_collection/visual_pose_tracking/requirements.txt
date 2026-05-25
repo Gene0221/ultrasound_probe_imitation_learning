@@ -1,0 +1,5 @@
+numpy
+opencv-python
+PyYAML
+pyrealsense2
+pupil-apriltags

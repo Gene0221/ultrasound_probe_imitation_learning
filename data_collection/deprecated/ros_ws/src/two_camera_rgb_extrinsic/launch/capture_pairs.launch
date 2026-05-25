@@ -1,4 +1,0 @@
-<launch>
-  <rosparam command="load" file="$(find two_camera_rgb_extrinsic)/config/default.yaml" />
-  <node pkg="two_camera_rgb_extrinsic" type="capture_rgb_pairs_node" name="capture_rgb_pairs" output="screen" />
-</launch>

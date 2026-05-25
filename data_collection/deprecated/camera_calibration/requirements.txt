@@ -1,4 +1,0 @@
-numpy
-opencv-python
-PyYAML
-pyrealsense2
