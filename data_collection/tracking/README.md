@@ -9,6 +9,7 @@ records at a user-level rate of 30 Hz.
 ```text
 real_pose_track/
   CMakeLists.txt
+  build.sh
   config/
     default.yaml
   launch.sh
@@ -60,8 +61,14 @@ This workspace expects:
 Example:
 
 ```bash
+bash data_collection/tracking/build.sh
+```
+
+Equivalent manual commands:
+
+```bash
 cmake -S data_collection/tracking -B data_collection/tracking/build
-cmake --build data_collection/tracking/build --config Release
+cmake --build data_collection/tracking/build -j
 ```
 
 ## Launch
