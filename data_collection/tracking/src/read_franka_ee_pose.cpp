@@ -7,8 +7,10 @@
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -29,6 +31,7 @@ volatile std::sig_atomic_t g_stop_requested = 0;
 struct Config {
   std::string robot_ip;
   std::string pose_source_field;
+  double connect_timeout_s = 10.0;
   double target_hz = 30.0;
   std::optional<int> max_samples;
   std::filesystem::path output_root;
@@ -249,6 +252,7 @@ Config LoadConfig(const std::filesystem::path& config_path) {
 
   config.robot_ip = root["robot"]["ip"].as<std::string>();
   config.pose_source_field = root["robot"]["pose_source_field"].as<std::string>("O_T_EE");
+  config.connect_timeout_s = root["robot"]["connect_timeout_s"].as<double>(10.0);
   config.target_hz = root["sampling"]["target_hz"].as<double>(30.0);
   if (root["sampling"]["max_samples"] && !root["sampling"]["max_samples"].IsNull()) {
     config.max_samples = root["sampling"]["max_samples"].as<int>();
@@ -265,6 +269,37 @@ Config LoadConfig(const std::filesystem::path& config_path) {
   config.include_robot_ip = root["recording"]["include_robot_ip"].as<bool>(true);
 
   return config;
+}
+
+std::unique_ptr<franka::Robot> ConnectRobotWithTimeout(
+    const std::string& robot_ip,
+    double timeout_s) {
+  if (timeout_s <= 0.0) {
+    throw std::runtime_error("robot.connect_timeout_s must be positive.");
+  }
+
+  std::promise<std::unique_ptr<franka::Robot>> promise;
+  std::future<std::unique_ptr<franka::Robot>> future = promise.get_future();
+
+  std::thread worker([robot_ip, promise = std::move(promise)]() mutable {
+    try {
+      auto robot = std::make_unique<franka::Robot>(robot_ip);
+      promise.set_value(std::move(robot));
+    } catch (...) {
+      promise.set_exception(std::current_exception());
+    }
+  });
+
+  const auto wait_status = future.wait_for(std::chrono::duration<double>(timeout_s));
+  if (wait_status == std::future_status::ready) {
+    worker.join();
+    return future.get();
+  }
+
+  worker.detach();
+  throw std::runtime_error(
+      "Timed out while connecting to Franka robot at " + robot_ip + " after " +
+      std::to_string(timeout_s) + " seconds.");
 }
 
 Matrix4 TransformFromState(const franka::RobotState& state, const std::string& pose_source_field) {
@@ -401,8 +436,9 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "[INFO] Connecting to Franka robot at " << config.robot_ip << "\n";
-    franka::Robot robot(config.robot_ip);
+    auto robot = ConnectRobotWithTimeout(config.robot_ip, config.connect_timeout_s);
     std::cout << "[INFO] Logging pose deltas at " << config.target_hz << " Hz\n";
+    std::cout << "[INFO] Connect timeout: " << config.connect_timeout_s << " s\n";
     std::cout << "[INFO] Output directory: " << output_root << "\n";
     std::cout << "[INFO] Press Ctrl+C to stop.\n";
 
@@ -417,7 +453,7 @@ int main(int argc, char** argv) {
       const auto loop_start = SteadyClock::now();
       const double host_timestamp_s = CurrentUnixTimestampSeconds();
       const std::string host_time_iso = CurrentIsoTime();
-      const franka::RobotState state = robot.readOnce();
+      const franka::RobotState state = robot->readOnce();
       const Matrix4 transform_base_ee = TransformFromState(state, config.pose_source_field);
 
       ++sample_index;

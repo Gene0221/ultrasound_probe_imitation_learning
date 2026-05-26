@@ -11,6 +11,8 @@ real_pose_track/
   CMakeLists.txt
   config/
     default.yaml
+  launch.sh
+  launch.ps1
   src/
     read_franka_ee_pose.cpp
   output/
@@ -40,6 +42,7 @@ absolute pose:
 All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/tracking/config/default.yaml), including:
 
 - robot IP
+- connection timeout
 - target sample rate
 - pose source field
 - output directory and file names
@@ -61,7 +64,32 @@ cmake -S data_collection/tracking -B data_collection/tracking/build
 cmake --build data_collection/tracking/build --config Release
 ```
 
-## Usage
+## Launch
+
+On Linux:
+
+```bash
+bash data_collection/tracking/launch.sh
+```
+
+or after making it executable:
+
+```bash
+chmod +x data_collection/tracking/launch.sh
+./data_collection/tracking/launch.sh
+```
+
+On Windows PowerShell:
+
+powershell -ExecutionPolicy Bypass -File data_collection/tracking/launch.ps1
+
+The launch scripts automatically:
+
+- locates the built executable under `build/` or `build/Release/`
+- also falls back to `src/` if you compile the binary there manually
+- uses `config/default.yaml` by default
+
+## Manual Usage
 
 ```bash
 data_collection/tracking/build/read_franka_ee_pose ^

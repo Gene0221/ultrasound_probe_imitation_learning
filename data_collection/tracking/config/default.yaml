@@ -1,6 +1,7 @@
 robot:
   ip: "172.16.0.2"
   pose_source_field: "O_T_EE"
+  connect_timeout_s: 10.0
 
 sampling:
   target_hz: 30.0
