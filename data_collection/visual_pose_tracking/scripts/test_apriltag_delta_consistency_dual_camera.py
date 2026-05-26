@@ -30,7 +30,7 @@ except ImportError as exc:  # pragma: no cover
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "apriltag_delta_consistency.yaml"
 
 

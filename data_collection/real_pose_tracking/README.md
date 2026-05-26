@@ -25,6 +25,7 @@ The logger writes one JSON object per line to a JSONL file. Each record follows
 the same pose-delta style used by the visual pose tracking workspace and
 contains:
 
+- `host_timestamp_s`
 - `prev_host_timestamp_s`
 - `curr_host_timestamp_s`
 - `delta_transform_prev_to_curr`
@@ -46,7 +47,6 @@ All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Des
 - target sample rate
 - pose source field
 - output directory and file names
-- optional stdout streaming
 - optional sample limit
 
 ## Build

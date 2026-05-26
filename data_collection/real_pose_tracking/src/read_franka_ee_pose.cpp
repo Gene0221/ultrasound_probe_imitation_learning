@@ -66,7 +66,6 @@ struct Quaternion {
 struct PoseSample {
   int sample_index = 0;
   double host_timestamp_s = 0.0;
-  std::string host_time_iso;
   Matrix4 transform_base_ee;
   std::array<double, 3> position_xyz{};
   Quaternion quaternion_xyzw;
@@ -321,13 +320,11 @@ Matrix4 TransformFromState(const franka::RobotState& state, const std::string& p
 PoseSample BuildSample(
     int sample_index,
     double host_timestamp_s,
-    const std::string& host_time_iso,
     const Matrix4& transform_base_ee,
     const std::string& pose_source_field) {
   PoseSample sample;
   sample.sample_index = sample_index;
   sample.host_timestamp_s = host_timestamp_s;
-  sample.host_time_iso = host_time_iso;
   sample.transform_base_ee = transform_base_ee;
   sample.position_xyz = {transform_base_ee(0, 3), transform_base_ee(1, 3), transform_base_ee(2, 3)};
   sample.quaternion_xyzw = RotationMatrixToQuaternion(transform_base_ee);
@@ -351,11 +348,9 @@ std::string BuildRecordJson(
   oss << "{";
   oss << "\"sample_index\": " << current_sample.sample_index << ", ";
   oss << "\"valid\": true, ";
+  oss << "\"host_timestamp_s\": " << std::setprecision(15) << current_sample.host_timestamp_s << ", ";
   oss << "\"prev_host_timestamp_s\": " << std::setprecision(15) << previous_sample.host_timestamp_s << ", ";
   oss << "\"curr_host_timestamp_s\": " << std::setprecision(15) << current_sample.host_timestamp_s << ", ";
-  oss << "\"prev_host_time_iso\": \"" << JsonEscape(previous_sample.host_time_iso) << "\", ";
-  oss << "\"curr_host_time_iso\": \"" << JsonEscape(current_sample.host_time_iso) << "\", ";
-  oss << "\"delta_dt_s\": " << std::setprecision(15) << (current_sample.host_timestamp_s - previous_sample.host_timestamp_s) << ", ";
   oss << "\"delta_transform_prev_to_curr\": " << Matrix4ToJson(delta_transform) << ", ";
   oss << "\"delta_translation_xyz\": " << ArrayToJson<3>(delta_translation) << ", ";
   oss << "\"delta_quaternion_xyzw\": " << QuaternionToJson(delta_quaternion);
@@ -435,12 +430,7 @@ int main(int argc, char** argv) {
       }
     }
 
-    std::cout << "[INFO] Connecting to Franka robot at " << config.robot_ip << "\n";
     auto robot = ConnectRobotWithTimeout(config.robot_ip, config.connect_timeout_s);
-    std::cout << "[INFO] Logging pose deltas at " << config.target_hz << " Hz\n";
-    std::cout << "[INFO] Connect timeout: " << config.connect_timeout_s << " s\n";
-    std::cout << "[INFO] Output directory: " << output_root << "\n";
-    std::cout << "[INFO] Press Ctrl+C to stop.\n";
 
     const double dt = 1.0 / config.target_hz;
     int sample_index = 0;
@@ -452,7 +442,6 @@ int main(int argc, char** argv) {
     while (!g_stop_requested) {
       const auto loop_start = SteadyClock::now();
       const double host_timestamp_s = CurrentUnixTimestampSeconds();
-      const std::string host_time_iso = CurrentIsoTime();
       const franka::RobotState state = robot->readOnce();
       const Matrix4 transform_base_ee = TransformFromState(state, config.pose_source_field);
 
@@ -460,7 +449,6 @@ int main(int argc, char** argv) {
       PoseSample current_sample = BuildSample(
           sample_index,
           host_timestamp_s,
-          host_time_iso,
           transform_base_ee,
           config.pose_source_field);
 
@@ -492,18 +480,6 @@ int main(int argc, char** argv) {
           WriteJsonLine(*jsonl_stream, record_json);
           ++records_logged;
         }
-
-        if (config.emit_stdout_records) {
-          std::cout << record_json << "\n";
-        } else {
-          std::cout << "[POSE] idx=" << current_sample.sample_index
-                    << " dt=" << std::fixed << std::setprecision(4)
-                    << (current_sample.host_timestamp_s - previous_sample->host_timestamp_s)
-                    << "s dxyz=("
-                    << delta_translation[0] << ", "
-                    << delta_translation[1] << ", "
-                    << delta_translation[2] << ")\n";
-        }
       }
 
       previous_sample = current_sample;
@@ -527,7 +503,6 @@ int main(int argc, char** argv) {
         first_timestamp_s,
         last_timestamp_s);
     summary_stream.close();
-    std::cout << "[DONE] Summary written to: " << summary_path << "\n";
     return 0;
   } catch (const franka::Exception& exc) {
     std::cerr << "[ERROR] libfranka exception: " << exc.what() << "\n";

@@ -5,7 +5,7 @@ import pyrealsense2 as rs
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent.parent
+PROJECT_ROOT = SCRIPT_DIR.parent
 DEFAULT_INTRINSICS_DIR = PROJECT_ROOT / "config" / "intrinsics"
 
 

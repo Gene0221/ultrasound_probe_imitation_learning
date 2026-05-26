@@ -12,7 +12,6 @@ output:
   jsonl_file_name: "franka_ee_pose_deltas.jsonl"
   summary_file_name: "summary.json"
   write_jsonl: true
-  emit_stdout_records: false
 
 recording:
   include_absolute_pose: true
