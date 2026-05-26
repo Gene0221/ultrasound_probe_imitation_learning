@@ -32,12 +32,6 @@ contains:
 - `delta_translation_xyz`
 - `delta_quaternion_xyzw`
 
-For debugging and downstream alignment, the logger also stores the current
-absolute pose:
-
-- `curr_position_xyz`
-- `curr_quaternion_xyzw`
-
 ## Configuration
 
 All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/tracking/config/default.yaml), including:

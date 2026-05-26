@@ -39,7 +39,7 @@ struct Config {
   std::string summary_file_name = "summary.json";
   bool write_jsonl = true;
   bool emit_stdout_records = false;
-  bool include_absolute_pose = true;
+  bool include_absolute_pose = false;
   bool include_pose_source_field = true;
   bool include_robot_ip = true;
 };
@@ -263,7 +263,7 @@ Config LoadConfig(const std::filesystem::path& config_path) {
   config.write_jsonl = root["output"]["write_jsonl"].as<bool>(true);
   config.emit_stdout_records = root["output"]["emit_stdout_records"].as<bool>(false);
 
-  config.include_absolute_pose = root["recording"]["include_absolute_pose"].as<bool>(true);
+  config.include_absolute_pose = root["recording"]["include_absolute_pose"].as<bool>(false);
   config.include_pose_source_field = root["recording"]["include_pose_source_field"].as<bool>(true);
   config.include_robot_ip = root["recording"]["include_robot_ip"].as<bool>(true);
 

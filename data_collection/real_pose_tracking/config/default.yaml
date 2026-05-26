@@ -14,6 +14,6 @@ output:
   write_jsonl: true
 
 recording:
-  include_absolute_pose: true
+  include_absolute_pose: false
   include_pose_source_field: true
   include_robot_ip: true
