@@ -13,7 +13,6 @@ real_pose_track/
   config/
     default.yaml
   launch.sh
-  launch.ps1
   src/
     read_franka_ee_pose.cpp
   output/
@@ -86,11 +85,7 @@ chmod +x data_collection/tracking/launch.sh
 ./data_collection/tracking/launch.sh
 ```
 
-On Windows PowerShell:
-
-powershell -ExecutionPolicy Bypass -File data_collection/tracking/launch.ps1
-
-The launch scripts automatically:
+The launch script automatically:
 
 - locates the built executable under `build/` or `build/Release/`
 - also falls back to `src/` if you compile the binary there manually
@@ -99,7 +94,7 @@ The launch scripts automatically:
 ## Manual Usage
 
 ```bash
-data_collection/tracking/build/read_franka_ee_pose ^
+./data_collection/tracking/build/read_franka_ee_pose \
   data_collection/tracking/config/default.yaml
 ```
 

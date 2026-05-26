@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Franka REQUIRED)
 find_package(yaml-cpp REQUIRED)
+find_package(Threads REQUIRED)
 
 add_executable(read_franka_ee_pose
   src/read_franka_ee_pose.cpp
@@ -16,4 +17,5 @@ target_link_libraries(read_franka_ee_pose
   PRIVATE
     Franka::Franka
     yaml-cpp
+    Threads::Threads
 )
