@@ -6,7 +6,7 @@ pose-delta estimation.
 ## Directory Layout
 
 ```text
-pose_tracking/
+visual_pose_tracking/
   config/
   scripts/
   utils/
@@ -35,5 +35,5 @@ pose_tracking/
 ## Dependencies
 
 ```bash
-python -m pip install -r data_collection/pose_tracking/requirements.txt
+python -m pip install -r data_collection/visual_pose_tracking/requirements.txt
 ```
