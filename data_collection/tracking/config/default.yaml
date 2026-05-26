@@ -1,9 +1,6 @@
 robot:
   ip: "172.16.0.2"
   pose_source_field: "O_T_EE"
-  fallback_pose_source_fields:
-    - "O_T_EE_c"
-  connect_timeout_s: 10.0
 
 sampling:
   target_hz: 30.0

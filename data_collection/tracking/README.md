@@ -1,20 +1,20 @@
-# Real Pose Track Workspace
+# Real Pose Tracking Workspace
 
 This workspace reads end-effector poses directly from a Franka Emika Panda
-robot through `pylibfranka` and writes pose-delta records at a user-level rate
-of 30 Hz.
+robot through the official C++ `libfranka` interface and writes pose-delta
+records at a user-level rate of 30 Hz.
 
 ## Directory Layout
 
 ```text
 real_pose_track/
+  CMakeLists.txt
   config/
     default.yaml
-  scripts/
-    read_franka_ee_pose.py
+  src/
+    read_franka_ee_pose.cpp
   output/
   README.md
-  requirements.txt
 ```
 
 ## Output Protocol
@@ -37,7 +37,7 @@ absolute pose:
 
 ## Configuration
 
-All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_track/config/default.yaml), including:
+All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/tracking/config/default.yaml), including:
 
 - robot IP
 - target sample rate
@@ -46,11 +46,26 @@ All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Des
 - optional stdout streaming
 - optional sample limit
 
+## Build
+
+This workspace expects:
+
+- `libfranka`
+- `yaml-cpp`
+- a CMake toolchain with C++17 support
+
+Example:
+
+```bash
+cmake -S data_collection/tracking -B data_collection/tracking/build
+cmake --build data_collection/tracking/build --config Release
+```
+
 ## Usage
 
 ```bash
-python data_collection/real_pose_track/scripts/read_franka_ee_pose.py ^
-  --config data_collection/real_pose_track/config/default.yaml
+data_collection/tracking/build/read_franka_ee_pose ^
+  data_collection/tracking/config/default.yaml
 ```
 
 Press `Ctrl+C` to stop logging.
