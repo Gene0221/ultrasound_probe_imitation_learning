@@ -1,0 +1,10 @@
+robot:
+  ip: "172.16.0.2"
+  connect_timeout_s: 10.0
+  pose_source_field: "O_T_EE"
+
+motion:
+  direction_ee_xyz: [1.0, 0.0, 0.0]
+  distance_m: 0.02
+  speed_mps: 0.01
+  accel_time_s: 0.5

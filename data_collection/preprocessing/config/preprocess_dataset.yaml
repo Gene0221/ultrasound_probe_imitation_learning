@@ -13,7 +13,7 @@ trajectories:
   - trajectory_id: traj_0001
     split: train
     pose:
-      path: data_collection/pose_tracking/data/camera/output/tag_pose_deltas.jsonl
+      path: data_collection/visual_pose_tracking/output/tag_pose_deltas.jsonl
     force:
       path: data_collection/force_tracking/data/output/force_records.jsonl
     ultrasound:

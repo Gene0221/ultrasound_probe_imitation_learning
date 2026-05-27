@@ -37,6 +37,6 @@ tracking:
   max_hamming: 0
 
 output:
-  output_root: "data/output"
+  output_root: "output"
   write_jsonl: true
   emit_stdout_records: false

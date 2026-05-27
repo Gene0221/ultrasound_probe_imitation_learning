@@ -8,6 +8,7 @@ pose-delta estimation.
 ```text
 visual_pose_tracking/
   config/
+  output/
   scripts/
   utils/
   README.md
@@ -22,6 +23,8 @@ visual_pose_tracking/
   - executable tracking and validation scripts
 - `utils`
   - lightweight helpers such as RGB intrinsics export
+- `output`
+  - tracking logs such as `tag_pose_deltas.jsonl` and `tracking_summary.json`
 
 ## Main Scripts
 

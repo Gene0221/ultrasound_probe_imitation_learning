@@ -34,7 +34,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 UTILS_DIR = PROJECT_ROOT / "utils"
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "apriltag_tracking.yaml"
-DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "data" / "output"
+DEFAULT_OUTPUT_ROOT = PROJECT_ROOT / "output"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 if str(UTILS_DIR) not in sys.path:

@@ -12,9 +12,12 @@ real_pose_track/
   build.sh
   config/
     default.yaml
+    move_ee_local_linear.yaml
   launch.sh
+  launch_move_ee_local_linear.sh
   src/
     read_franka_ee_pose.cpp
+    move_ee_local_linear.cpp
   output/
   README.md
 ```
@@ -64,6 +67,11 @@ cmake -S data_collection/tracking -B data_collection/tracking/build
 cmake --build data_collection/tracking/build -j
 ```
 
+The build now produces two executables:
+
+- `read_franka_ee_pose`
+- `move_ee_local_linear`
+
 ## Launch
 
 On Linux:
@@ -84,6 +92,33 @@ The launch script automatically:
 - locates the built executable under `build/` or `build/Release/`
 - also falls back to `src/` if you compile the binary there manually
 - uses `config/default.yaml` by default
+
+## Local Linear Motion
+
+`move_ee_local_linear.cpp` moves the end effector along a direction expressed in
+the end effector's own coordinate frame while keeping orientation fixed.
+
+Its config lives in
+[config/move_ee_local_linear.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/config/move_ee_local_linear.yaml)
+and includes:
+
+- `direction_ee_xyz`
+- `distance_m`
+- `speed_mps`
+- `accel_time_s`
+
+Example launch:
+
+```bash
+bash data_collection/real_pose_tracking/launch_move_ee_local_linear.sh
+```
+
+or with an explicit config:
+
+```bash
+bash data_collection/real_pose_tracking/launch_move_ee_local_linear.sh \
+  data_collection/real_pose_tracking/config/move_ee_local_linear.yaml
+```
 
 ## Manual Usage
 

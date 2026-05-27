@@ -19,3 +19,14 @@ target_link_libraries(read_franka_ee_pose
     yaml-cpp
     Threads::Threads
 )
+
+add_executable(move_ee_local_linear
+  src/move_ee_local_linear.cpp
+)
+
+target_link_libraries(move_ee_local_linear
+  PRIVATE
+    Franka::Franka
+    yaml-cpp
+    Threads::Threads
+)
