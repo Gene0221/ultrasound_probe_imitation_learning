@@ -1,0 +1,29 @@
+device:
+  serial_no: "337122072369"
+
+imu:
+  accel_hz: 200
+  gyro_hz: 200
+
+calibration:
+  stationary_duration_s: 2.0
+
+filter:
+  accel_low_pass_alpha: 0.9
+
+sampling:
+  output_hz: 30.0
+  max_samples: null
+
+output:
+  output_root: "output"
+  jsonl_file_name: "imu_pitch_roll.jsonl"
+  summary_file_name: "summary.json"
+  write_jsonl: true
+
+recording:
+  include_device_timestamp_ms: true
+  include_frame_number: true
+  include_raw_accel_xyz: false
+  include_raw_gyro_xyz: false
+  include_tilt_deg: true

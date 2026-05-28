@@ -2,7 +2,7 @@ camera_a:
   serial_no: "213622073198"
 
 camera_b:
-  serial_no: "337122072369"
+  serial_no: "213722070411"
 
 capture:
   width: 1280
@@ -32,8 +32,8 @@ apriltag:
   decode_sharpening: 0.25
 
 tracking:
-  tag_ids: [0, 1]
-  tag_size_m: 0.04
+  tag_ids: [0]
+  tag_size_m: 0.0195
   max_hamming: 0
 
 output:

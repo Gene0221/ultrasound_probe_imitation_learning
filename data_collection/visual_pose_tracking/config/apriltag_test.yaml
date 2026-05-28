@@ -17,9 +17,9 @@ apriltag:
   refine_edges: 1
   decode_sharpening: 0.25
   tag_ids: []
-  tag_size_m: 0.04
+  tag_size_m: 0.0195
   max_hamming: 0
-  axis_length_m: 0.02
+  axis_length_m: 0.00975
 
 preview:
   width: 1280
