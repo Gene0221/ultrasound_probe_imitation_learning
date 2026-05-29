@@ -23,13 +23,15 @@
         "workspace_root": "../paxini_force_grasping",
         "script_path": "scripts/log_paxini_force.py",
         "base_config_path": "config/default.json",
-        "output_subdir": "paxini"
+        "output_subdir": "paxini",
+        "print_human_readable": false
       },
       "force6d": {
         "workspace_root": "../6D_force_grasping",
         "script_path": "scripts/read_data.py",
         "base_config_path": "config/default.json",
-        "output_subdir": "force6d"
+        "output_subdir": "force6d",
+        "print_human_readable": false
       }
     }
   },

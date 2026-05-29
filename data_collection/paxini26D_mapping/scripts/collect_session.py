@@ -73,9 +73,13 @@ def prepare_module_config(
         runtime_config["output_root"] = str(output_dir)
         runtime_config["left_file_name"] = "left_sensor.jsonl"
         runtime_config["right_file_name"] = "right_sensor.jsonl"
+        if "print_human_readable" in module_cfg:
+            runtime_config["print_human_readable"] = bool(module_cfg["print_human_readable"])
     elif module_name == "force6d":
         runtime_config["output_root"] = str(output_dir)
         runtime_config["file_name"] = "force6d.jsonl"
+        if "print_human_readable" in module_cfg:
+            runtime_config["print_human_readable"] = bool(module_cfg["print_human_readable"])
     else:
         raise KeyError(f"Unknown module: {module_name}")
 

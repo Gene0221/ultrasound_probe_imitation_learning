@@ -60,6 +60,10 @@ This launches:
 
 and archives the resulting calibration files under `calibrations/`.
 
+For unified collection, `paxini26D_mapping/config/default.json` can override
+the child collectors' terminal printing. The default setup keeps Paxini and 6D
+live-value printing off during coordinated runs.
+
 Build a unified training dataset:
 
 ```powershell

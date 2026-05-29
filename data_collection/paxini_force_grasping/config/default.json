@@ -11,7 +11,7 @@
     "tare_samples": 30
   },
   "serial": {
-    "port": "COM6",
+    "port": "COM4",
     "baudrate": 921600
   }
 }
