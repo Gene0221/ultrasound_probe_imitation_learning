@@ -1,0 +1,7 @@
+numpy>=1.24
+opencv-python
+PyYAML
+pyrealsense2
+pupil-apriltags
+pyserial
+torch

@@ -33,7 +33,7 @@ apriltag:
 
 tracking:
   tag_ids: [0]
-  tag_size_m: 0.0195
+  tag_size_m: 0.048
   max_hamming: 0
 
 output:

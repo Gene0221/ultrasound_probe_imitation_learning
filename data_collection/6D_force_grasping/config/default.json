@@ -1,0 +1,16 @@
+{
+  "sampling_hz": 30.0,
+  "output_root": "output",
+  "file_name": "force6d.jsonl",
+  "print_human_readable": true,
+  "calibration": {
+    "bias_file": "config/zero_bias.json",
+    "tare_samples": 100
+  },
+  "serial": {
+    "port": "AUTO",
+    "baudrate": 460800,
+    "request_mode": true,
+    "debug": false
+  }
+}
