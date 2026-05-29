@@ -47,10 +47,45 @@ def resolve_workspace_path(path_value: str | Path) -> Path:
     return (PROJECT_ROOT / path).resolve()
 
 
+def list_available_ports_details() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for port in list_ports.comports():
+        rows.append(
+            {
+                "device": port.device,
+                "description": getattr(port, "description", None),
+                "serial_number": getattr(port, "serial_number", None),
+                "manufacturer": getattr(port, "manufacturer", None),
+                "product": getattr(port, "product", None),
+                "hwid": getattr(port, "hwid", None),
+            }
+        )
+    return rows
+
+
 def resolve_port(config: dict[str, Any]) -> str:
-    requested = str(config.get("serial", {}).get("port", "AUTO")).strip()
-    ports = [p.device for p in list_ports.comports()]
+    serial_cfg = config.get("serial", {})
+    requested = str(serial_cfg.get("port", "AUTO")).strip()
+    requested_serial = str(serial_cfg.get("serial_number", "") or "").strip()
+    port_rows = list_available_ports_details()
+    ports = [row["device"] for row in port_rows]
     print(f"available ports: {ports}")
+    if requested_serial:
+        print(f"requested serial_number: {requested_serial}")
+        matching = [row for row in port_rows if str(row.get("serial_number") or "").strip() == requested_serial]
+        if len(matching) == 1:
+            selected = str(matching[0]["device"])
+            print(f"matched serial_number {requested_serial} -> {selected}")
+            return selected
+        if not matching:
+            raise RuntimeError(
+                f"Configured serial_number '{requested_serial}' was not found. "
+                f"Available ports: {port_rows}"
+            )
+        raise RuntimeError(
+            f"Configured serial_number '{requested_serial}' matched multiple ports. "
+            f"Available ports: {port_rows}"
+        )
     if requested.upper() == "AUTO":
         if len(ports) == 1:
             selected = ports[0]
@@ -60,10 +95,10 @@ def resolve_port(config: dict[str, Any]) -> str:
             raise RuntimeError("No serial ports detected. Connect the sensor and check the USB/serial adapter.")
         raise RuntimeError(
             "AUTO port selection is ambiguous because multiple serial ports are available: "
-            f"{ports}. Set `serial.port` explicitly in config/default.json."
+            f"{port_rows}. Set `serial.serial_number` or `serial.port` explicitly in config/default.json."
         )
     if requested not in ports:
-        raise RuntimeError(f"Configured serial port '{requested}' was not found. Available ports: {ports}")
+        raise RuntimeError(f"Configured serial port '{requested}' was not found. Available ports: {port_rows}")
     return requested
 
 

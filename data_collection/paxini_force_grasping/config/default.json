@@ -11,7 +11,8 @@
     "tare_samples": 30
   },
   "serial": {
-    "port": "COM4",
+    "port": "AUTO",
+    "serial_number": "D4B86775660C",
     "baudrate": 921600
   }
 }

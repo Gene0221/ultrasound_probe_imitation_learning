@@ -71,9 +71,12 @@ Current config fields:
 - `calibration.tare_samples`
   - number of samples used when running `zero_calibration.py`
 - `serial.port`
-  - serial port, for example `COM3`
+  - serial port, for example `/dev/ttyUSB0` or `/dev/ttyACM0`
   - can also be `AUTO`, which selects the port automatically when exactly one
     serial port is available
+- `serial.serial_number`
+  - preferred USB serial identifier for stable port matching when multiple
+    serial devices are connected
 - `serial.baudrate`
   - serial baudrate
 - `serial.request_mode`
@@ -150,6 +153,8 @@ So the same script is used for:
 - If you see `pyserial is required`, install `pyserial` first.
 - If the serial port cannot be opened, check `serial.port`.
 - If `AUTO` reports multiple ports, set the exact port name manually.
+- Prefer setting `serial.serial_number` when both Paxini and 6D sensors are
+  connected at the same time.
 - If frames cannot be parsed, confirm baudrate and sensor protocol settings.
 - If zero calibration looks unstable, keep the sensor unloaded and still while
   running `zero_calibration.py`.

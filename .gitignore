@@ -78,6 +78,16 @@ events.out.tfevents*
 data/
 datasets/
 
+# Project runtime artifacts
+data_collection/6D_force_grasping/output/
+data_collection/6D_force_grasping/config/zero_bias.json
+data_collection/paxini_force_grasping/output/
+data_collection/paxini_force_grasping/config/dp_s2015_calibration.json
+data_collection/paxini26D_mapping/sessions/
+data_collection/paxini26D_mapping/calibrations/
+data_collection/paxini26D_mapping/dataset/
+data_collection/paxini26D_mapping/model/
+
 # Keep repository structure files if needed
 !**/data/.gitkeep
 !**/datasets/.gitkeep

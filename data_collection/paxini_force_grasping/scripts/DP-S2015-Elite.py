@@ -9,7 +9,7 @@ from serial import SerialException
 from serial.tools import list_ports
 
 
-PORT = "COM6"
+PORT = "AUTO"
 BAUDRATE = 921600
 RESOLUTION = 0.1  # raw LSB -> N
 EXPECTED_SENSOR_COUNT = 2
@@ -174,7 +174,7 @@ class HandBoard:
         except SerialException as exc:
             raise RuntimeError(
                 f"cannot open {self.port}. Available ports: {ports}. "
-                "Close Paxini upper software or pass the correct port, for example: --port COM7"
+                "Close Paxini upper software or pass the correct port, for example: --port /dev/ttyUSB0"
             ) from exc
         time.sleep(0.3)
         self.ser.reset_input_buffer()

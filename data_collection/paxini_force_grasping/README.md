@@ -108,7 +108,10 @@ Current config fields:
 - `calibration.tare_samples`
   - number of samples used during zero calibration
 - `serial.port`
-  - serial port for the Paxini HAND board
+  - serial port for the Paxini HAND board, for example `/dev/ttyUSB0`
+- `serial.serial_number`
+  - preferred USB serial identifier for stable port matching when multiple
+    serial devices are connected
 - `serial.baudrate`
   - serial baudrate
 
@@ -149,6 +152,8 @@ and on the vendor communication logic contained in `DP-S2015-Elite.py`.
 ## Troubleshooting
 
 - If the serial port cannot be opened, check `serial.port`.
+- Prefer setting `serial.serial_number` when both Paxini and 6D sensors are
+  connected at the same time.
 - If the second sensor is missing, check the HAND board wiring and module setup.
 - If no calibration file exists, the acquisition script will still run, but it
   will use raw values instead of zero-calibrated ones.
