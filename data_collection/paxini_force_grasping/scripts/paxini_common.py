@@ -40,9 +40,35 @@ def list_available_ports_details() -> list[dict[str, Any]]:
                 "manufacturer": getattr(port, "manufacturer", None),
                 "product": getattr(port, "product", None),
                 "hwid": getattr(port, "hwid", None),
+                "location": getattr(port, "location", None),
+                "vid": getattr(port, "vid", None),
+                "pid": getattr(port, "pid", None),
             }
         )
     return rows
+
+
+def format_port_info(port_info: dict[str, Any]) -> str:
+    return (
+        f"{port_info.get('device')}: desc={port_info.get('description')!r}, "
+        f"hwid={port_info.get('hwid')!r}, vid={port_info.get('vid')}, pid={port_info.get('pid')}, "
+        f"serial={port_info.get('serial_number')!r}, location={port_info.get('location')!r}, "
+        f"manufacturer={port_info.get('manufacturer')!r}, product={port_info.get('product')!r}"
+    )
+
+
+def print_ports() -> None:
+    rows = list_available_ports_details()
+    if not rows:
+        print("no serial ports found")
+        return
+    print("serial ports:")
+    for row in rows:
+        print(f"  {format_port_info(row)}")
+
+
+def normalize_serial(value: Any) -> str:
+    return "" if value is None else str(value)
 
 
 def resolve_port(config: dict[str, Any], default_port: str) -> str:
@@ -51,7 +77,12 @@ def resolve_port(config: dict[str, Any], default_port: str) -> str:
     requested_serial = str(serial_cfg.get("serial_number", "") or "").strip()
     port_rows = list_available_ports_details()
     if requested_serial:
-        matching = [row for row in port_rows if str(row.get("serial_number") or "").strip() == requested_serial]
+        target_serial = normalize_serial(requested_serial).lower()
+        matching = [
+            row
+            for row in port_rows
+            if normalize_serial(row.get("serial_number")).lower() == target_serial
+        ]
         if len(matching) == 1:
             selected = str(matching[0]["device"])
             print(f"matched serial_number {requested_serial} -> {selected}")

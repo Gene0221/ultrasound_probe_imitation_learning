@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import serial
 from serial import SerialException
@@ -20,6 +21,55 @@ SENSOR_LABELS = [
     "DP-S2015 #1",
     "DP-S2015 #2",
 ]
+
+
+def format_port_info(port_info) -> str:
+    return (
+        f"{port_info.device}: desc={port_info.description!r}, "
+        f"hwid={port_info.hwid!r}, vid={port_info.vid}, pid={port_info.pid}, "
+        f"serial={port_info.serial_number!r}, location={port_info.location!r}, "
+        f"manufacturer={port_info.manufacturer!r}, product={port_info.product!r}"
+    )
+
+
+def normalize_serial(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def print_ports() -> None:
+    ports = list(list_ports.comports())
+    if not ports:
+        print("no serial ports found")
+        return
+    print("serial ports:")
+    for port_info in ports:
+        print(f"  {format_port_info(port_info)}")
+
+
+def resolve_port(port: str | None = None, serial_number: str | None = None) -> str:
+    ports = list(list_ports.comports())
+    if serial_number:
+        target_serial = normalize_serial(serial_number).lower()
+        matches = [
+            port_info
+            for port_info in ports
+            if normalize_serial(port_info.serial_number).lower() == target_serial
+        ]
+        if len(matches) == 1:
+            return matches[0].device
+        if not matches:
+            available = ", ".join(
+                f"{p.device}(serial={p.serial_number!r})" for p in ports
+            ) or "none"
+            raise RuntimeError(
+                f"no serial port found with serial_number={serial_number!r}. "
+                f"Available ports: {available}"
+            )
+        raise RuntimeError(
+            f"multiple serial ports matched serial_number={serial_number!r}: "
+            + ", ".join(format_port_info(p) for p in matches)
+        )
+    return port or PORT
 
 
 def checksum(data: bytes) -> int:
@@ -499,9 +549,15 @@ class HandBoard:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Read DP-S2015 sensors through Paxini HAND board.")
     parser.add_argument("--port", default=PORT, help=f"serial port, default: {PORT}")
+    parser.add_argument("--serial-number", default=None, help="USB serial adapter serial number")
+    parser.add_argument("--list-ports", action="store_true", help="list serial ports and exit")
     args = parser.parse_args()
 
-    board = HandBoard(port=args.port)
+    if args.list_ports:
+        print_ports()
+        raise SystemExit(0)
+
+    board = HandBoard(port=resolve_port(args.port, args.serial_number))
     try:
         board.connect()
         board.get_version()
