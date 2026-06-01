@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -12,7 +12,7 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.json"
 MODULE_PATH = SCRIPT_DIR / "DP-S2015-Elite.py"
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
+def load_config(path: Union[str, Path]) -> dict[str, Any]:
     config_path = Path(path).resolve()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -20,7 +20,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def resolve_workspace_path(path_value: str | Path) -> Path:
+def resolve_workspace_path(path_value: Union[str, Path]) -> Path:
     path = Path(path_value)
     if path.is_absolute():
         return path.resolve()

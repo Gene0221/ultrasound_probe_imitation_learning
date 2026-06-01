@@ -3,7 +3,7 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import serial
 from serial import SerialException
@@ -46,7 +46,7 @@ def print_ports() -> None:
         print(f"  {format_port_info(port_info)}")
 
 
-def resolve_port(port: str | None = None, serial_number: str | None = None) -> str:
+def resolve_port(port: Optional[str] = None, serial_number: Optional[str] = None) -> str:
     ports = list(list_ports.comports())
     if serial_number:
         target_serial = normalize_serial(serial_number).lower()
@@ -96,7 +96,7 @@ def int8(value: int) -> int:
     return value - 256 if value > 127 else value
 
 
-def parse_sensor_payload(payload: bytes, sensor_points: list[int]) -> list[dict]:
+def parse_sensor_payload(payload: bytes, sensor_points: List[int]) -> List[Dict]:
     sensors = []
     cursor = 0
 
@@ -144,7 +144,7 @@ def parse_sensor_payload(payload: bytes, sensor_points: list[int]) -> list[dict]
     return sensors
 
 
-def apply_calibration(sensors: list[dict], calibration: dict | None) -> list[dict]:
+def apply_calibration(sensors: List[Dict], calibration: Optional[Dict]) -> List[Dict]:
     if not calibration:
         return sensors
 
@@ -171,7 +171,7 @@ def apply_calibration(sensors: list[dict], calibration: dict | None) -> list[dic
     return sensors
 
 
-def load_calibration(path=CALIBRATION_FILE) -> dict | None:
+def load_calibration(path=CALIBRATION_FILE) -> Optional[Dict]:
     if not path.exists():
         print(f"calibration file not found: {path}")
         return None
@@ -245,7 +245,7 @@ class HandBoard:
         self.ser.write(frame)
         self.ser.flush()
 
-    def read_frame(self, timeout=1.0) -> bytes | None:
+    def read_frame(self, timeout=1.0) -> Optional[bytes]:
         deadline = time.perf_counter() + timeout
 
         while time.perf_counter() < deadline:
@@ -295,7 +295,7 @@ class HandBoard:
 
         return None
 
-    def request(self, name: str, frame: bytes, timeout=1.0) -> bytes | None:
+    def request(self, name: str, frame: bytes, timeout=1.0) -> Optional[bytes]:
         self.send(frame)
         response = self.read_frame(timeout=timeout)
         if response is None:
