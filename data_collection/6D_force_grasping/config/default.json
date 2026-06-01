@@ -9,7 +9,7 @@
   },
   "serial": {
     "port": "AUTO",
-    "serial_number": "AB0KU8NUA",
+    "serial_number": "AB0KU8NU",
     "baudrate": 460800,
     "request_mode": true,
     "debug": false

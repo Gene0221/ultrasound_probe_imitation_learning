@@ -52,6 +52,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="Path to YAML config file.")
     parser.add_argument("--list-devices", action="store_true", help="List detected RealSense devices and exit.")
+    stdout_group = parser.add_mutually_exclusive_group()
+    stdout_group.add_argument(
+        "--print-stdout",
+        dest="print_stdout",
+        action="store_true",
+        default=None,
+        help="Print each emitted IMU record to stdout.",
+    )
+    stdout_group.add_argument(
+        "--no-print-stdout",
+        dest="print_stdout",
+        action="store_false",
+        help="Do not print emitted IMU records to stdout.",
+    )
     return parser.parse_args()
 
 
@@ -311,7 +325,7 @@ def build_record(
     return payload
 
 
-def run_logger(config: dict[str, Any]) -> None:
+def run_logger(config: dict[str, Any], print_stdout_override: bool | None = None) -> None:
     calibration_cfg = config.get("calibration", {})
     filter_cfg = config.get("filter", {})
     sampling_cfg = config.get("sampling", {})
@@ -332,6 +346,9 @@ def run_logger(config: dict[str, Any]) -> None:
     previous_sigterm = signal.signal(signal.SIGTERM, handle_signal)
 
     write_jsonl = bool(output_cfg.get("write_jsonl", True))
+    print_stdout = bool(output_cfg.get("print_stdout", True))
+    if print_stdout_override is not None:
+        print_stdout = bool(print_stdout_override)
     output_hz = float(sampling_cfg.get("output_hz", 100.0))
     max_samples = sampling_cfg.get("max_samples")
     max_samples = int(max_samples) if max_samples is not None else None
@@ -413,7 +430,8 @@ def run_logger(config: dict[str, Any]) -> None:
 
                 if write_jsonl:
                     append_jsonl(jsonl_path, record)
-                print(json.dumps(record, ensure_ascii=True), flush=True)
+                if print_stdout:
+                    print(json.dumps(record, ensure_ascii=True), flush=True)
 
                 if first_host_timestamp_s is None:
                     first_host_timestamp_s = sample.host_timestamp_s
@@ -457,7 +475,7 @@ def main() -> None:
         return
 
     config = load_config(args.config)
-    run_logger(config)
+    run_logger(config, print_stdout_override=args.print_stdout)
 
 
 if __name__ == "__main__":

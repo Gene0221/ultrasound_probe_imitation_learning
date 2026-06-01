@@ -20,6 +20,7 @@ output:
   jsonl_file_name: "imu_pitch_roll.jsonl"
   summary_file_name: "summary.json"
   write_jsonl: true
+  print_stdout: true
 
 recording:
   include_device_timestamp_ms: true
