@@ -17,15 +17,38 @@ except ImportError as exc:  # pragma: no cover
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
-FRAME_HEADER = b"\x49\xaa"
+FRAME_HEADERS = (b"\x49\xaa", b"\x48\xaa")
 FRAME_TAIL = b"\x0d\x0a"
 FRAME_LEN = 28
+
+
+def format_port_info(port_info) -> str:
+    return (
+        f"{port_info.device}: desc={port_info.description!r}, "
+        f"hwid={port_info.hwid!r}, vid={port_info.vid}, pid={port_info.pid}, "
+        f"serial={port_info.serial_number!r}, location={port_info.location!r}, "
+        f"manufacturer={port_info.manufacturer!r}, product={port_info.product!r}"
+    )
+
+
+def normalize_serial(value: Any) -> str:
+    return "" if value is None else str(value)
+
+
+def print_ports() -> None:
+    ports = list(list_ports.comports())
+    if not ports:
+        print("no serial ports found")
+        return
+    print("serial ports:")
+    for port_info in ports:
+        print(f"  {format_port_info(port_info)}")
 
 
 def parse_frame(frame: bytes):
     if len(frame) != FRAME_LEN:
         raise ValueError(f"invalid frame length: {len(frame)}")
-    if frame[:2] != FRAME_HEADER:
+    if frame[:2] not in FRAME_HEADERS:
         raise ValueError(f"invalid header: {frame[:2].hex(' ')}")
     if frame[-2:] != FRAME_TAIL:
         raise ValueError(f"invalid tail: {frame[-2:].hex(' ')}")
@@ -58,21 +81,35 @@ def list_available_ports_details() -> list[dict[str, Any]]:
                 "manufacturer": getattr(port, "manufacturer", None),
                 "product": getattr(port, "product", None),
                 "hwid": getattr(port, "hwid", None),
+                "location": getattr(port, "location", None),
+                "vid": getattr(port, "vid", None),
+                "pid": getattr(port, "pid", None),
             }
         )
     return rows
 
 
-def resolve_port(config: dict[str, Any]) -> str:
-    serial_cfg = config.get("serial", {})
-    requested = str(serial_cfg.get("port", "AUTO")).strip()
-    requested_serial = str(serial_cfg.get("serial_number", "") or "").strip()
+def resolve_port(
+    config: dict[str, Any] | None = None,
+    port: str | None = None,
+    serial_number: str | None = None,
+) -> str:
+    serial_cfg = (config or {}).get("serial", {})
+    requested = str(port if port is not None else serial_cfg.get("port", "AUTO")).strip()
+    requested_serial = str(
+        serial_number if serial_number is not None else serial_cfg.get("serial_number", "")
+    ).strip()
     port_rows = list_available_ports_details()
     ports = [row["device"] for row in port_rows]
     print(f"available ports: {ports}")
     if requested_serial:
         print(f"requested serial_number: {requested_serial}")
-        matching = [row for row in port_rows if str(row.get("serial_number") or "").strip() == requested_serial]
+        target_serial = normalize_serial(requested_serial).lower()
+        matching = [
+            row
+            for row in port_rows
+            if normalize_serial(row.get("serial_number")).lower() == target_serial
+        ]
         if len(matching) == 1:
             selected = str(matching[0]["device"])
             print(f"matched serial_number {requested_serial} -> {selected}")
@@ -126,7 +163,13 @@ def read_exact_frame(ser: serial.Serial, buffer: bytearray, debug=False):
             print("waiting for serial data...")
             last_status_time = time.monotonic()
 
-        header_index = buffer.find(FRAME_HEADER)
+        header_indexes = [
+            index
+            for header in FRAME_HEADERS
+            for index in [buffer.find(header)]
+            if index >= 0
+        ]
+        header_index = min(header_indexes) if header_indexes else -1
         if header_index < 0:
             if len(buffer) > 1:
                 if debug:
@@ -141,10 +184,11 @@ def read_exact_frame(ser: serial.Serial, buffer: bytearray, debug=False):
             continue
 
         frame = bytes(buffer[:FRAME_LEN])
-        del buffer[:FRAME_LEN]
         if frame[-2:] != FRAME_TAIL:
             print(f"frame tail mismatch, resync: {frame.hex(' ')}")
+            del buffer[0]
             continue
+        del buffer[:FRAME_LEN]
         return frame
 
 

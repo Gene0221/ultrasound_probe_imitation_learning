@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from pathlib import Path
 from typing import Any
 
 import serial
@@ -12,6 +11,7 @@ from kwr75b_common import (
     PROJECT_ROOT,
     load_bias,
     load_config,
+    print_ports,
     read_one_sample,
     read_keyboard_char,
     resolve_port,
@@ -45,8 +45,6 @@ def read_kwr75b(
     file_name="force6d.jsonl",
     print_human_readable=True,
 ):
-    ports = [p.device for p in list_ports.comports()]
-    print(f"available ports: {ports}")
     print(f"open {port}, baudrate={baudrate}, request_mode={request_mode}")
 
     ser = serial.Serial(
@@ -117,12 +115,27 @@ def parse_args() -> argparse.Namespace:
         description="Read KWR75B 6D force/torque data, print live values, and save JSONL logs."
     )
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH))
+    parser.add_argument("--port", default=None, help="serial port, for example /dev/ttyUSB0 or COM3")
+    parser.add_argument("--serial-number", default=None, help="USB serial adapter serial number")
+    parser.add_argument("--baudrate", type=int, default=None)
+    parser.add_argument("--list-ports", action="store_true", help="list serial ports and exit")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+    if args.list_ports:
+        print_ports()
+        raise SystemExit(0)
+
     config = load_config(args.config)
+    if args.port is not None:
+        config.setdefault("serial", {})["port"] = args.port
+    if args.serial_number is not None:
+        config.setdefault("serial", {})["serial_number"] = args.serial_number
+    if args.baudrate is not None:
+        config.setdefault("serial", {})["baudrate"] = args.baudrate
+
     bias_path = resolve_workspace_path(config.get("calibration", {}).get("bias_file", "config/zero_bias.json"))
     bias = load_bias(bias_path)
     print(f"[INFO] Loaded zero bias from {bias_path}")
