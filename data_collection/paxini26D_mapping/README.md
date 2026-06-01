@@ -76,6 +76,40 @@ Train the first regression model:
 python scripts/train_model.py
 ```
 
+Collect inference-only inputs, without the 6D reference sensor:
+
+```powershell
+python scripts/collect_inference_inputs.py
+```
+
+Press `Enter` to stop. The run is archived under `inference_sessions/inference_xxxx/`
+with only `imu/`, `paxini/`, and `metadata/`.
+
+For a fixed-duration inference input run:
+
+```powershell
+python scripts/collect_inference_inputs.py --duration-s 30
+```
+
+Run the trained model on the newest inference session:
+
+```powershell
+python scripts/predict_force.py
+```
+
+This loads the newest `model/run_*/model.pt`, aligns IMU and Paxini timestamps,
+and writes:
+
+```text
+inference_sessions/inference_xxxx/prediction/predicted_force.jsonl
+```
+
+Use explicit paths when needed:
+
+```powershell
+python scripts/predict_force.py --session inference_0001 --checkpoint model/run_xxx/model.pt
+```
+
 ## Placeholder Data Contracts
 
 IMU file:
@@ -113,3 +147,10 @@ python scripts/read_data.py --config config/default.json
 - matching method: nearest timestamp
 - max allowed delta: `0.05s`
 - samples beyond the threshold are dropped
+
+For inference prediction, the anchor stream is the left Paxini sensor. The
+feature order follows the saved checkpoint metadata, currently:
+
+```text
+pitch_deg, roll_deg, left_Fx, left_Fy, left_Fz, right_Fx, right_Fy, right_Fz
+```

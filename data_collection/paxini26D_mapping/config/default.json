@@ -64,6 +64,30 @@
     "paxini_left_file_name": "left_sensor.jsonl",
     "paxini_right_file_name": "right_sensor.jsonl"
   },
+  "inference": {
+    "sessions_root": "inference_sessions",
+    "session_prefix": "inference_",
+    "collect": {
+      "termination_grace_s": 5.0,
+      "python_executable": "python",
+      "modules": {
+        "imu": {
+          "workspace_root": "../imu_pose_grasping",
+          "script_path": "scripts/log_d435i_pitch_roll.py",
+          "base_config_path": "config/default.yaml",
+          "output_subdir": "imu",
+          "print_stdout": false
+        },
+        "paxini": {
+          "workspace_root": "../paxini_force_grasping",
+          "script_path": "scripts/log_paxini_force.py",
+          "base_config_path": "config/default.json",
+          "output_subdir": "paxini",
+          "print_human_readable": false
+        }
+      }
+    }
+  },
   "training": {
     "seed": 7,
     "batch_size": 128,

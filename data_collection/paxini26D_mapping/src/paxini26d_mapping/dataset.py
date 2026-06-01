@@ -4,7 +4,7 @@ import json
 from bisect import bisect_left
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 
@@ -44,7 +44,7 @@ def parse_timed_records(path: Path) -> list[TimedRecord]:
 def nearest_record(
     timestamp_s: float,
     records: list[TimedRecord],
-) -> tuple[TimedRecord | None, float]:
+) -> tuple[Optional[TimedRecord], float]:
     if not records:
         return None, float("inf")
     timestamps = [record.host_timestamp_s for record in records]
@@ -75,7 +75,7 @@ def build_dataset(
     session_ids: list[str] = []
     anchor_timestamps: list[float] = []
     match_deltas: list[dict[str, float]] = []
-    feature_dim: int | None = None
+    feature_dim: Optional[int] = None
 
     for session_dir in session_dirs:
         imu_path = session_dir / "imu" / dataset_cfg["imu_file_name"]

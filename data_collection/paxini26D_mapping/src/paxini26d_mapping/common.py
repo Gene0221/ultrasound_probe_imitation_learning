@@ -4,7 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -14,7 +14,7 @@ def project_path(*parts: str) -> Path:
     return PROJECT_ROOT.joinpath(*parts).resolve()
 
 
-def resolve_from(root: Path, path_value: str | Path) -> Path:
+def resolve_from(root: Path, path_value: Union[str, Path]) -> Path:
     path = Path(path_value)
     if path.is_absolute():
         return path.resolve()

@@ -8,7 +8,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Union
 
 import numpy as np
 import yaml
@@ -69,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_path(path_value: str | Path, base_dir: Path | None = None) -> Path:
+def resolve_path(path_value: Union[str, Path], base_dir: Optional[Path] = None) -> Path:
     path = Path(path_value)
     if path.is_absolute():
         return path.resolve()
@@ -88,7 +88,7 @@ def load_yaml_or_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
+def load_config(path: Union[str, Path]) -> dict[str, Any]:
     config_path = resolve_path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found: {config_path}")
@@ -111,7 +111,7 @@ def list_realsense_devices() -> list[dict[str, str]]:
     return devices_info
 
 
-def get_connected_device_by_serial(serial_no: str) -> rs.device | None:
+def get_connected_device_by_serial(serial_no: str) -> Optional[rs.device]:
     for device in rs.context().query_devices():
         if not device.supports(rs.camera_info.serial_number):
             continue
@@ -140,7 +140,7 @@ def get_motion_profile_summary(device: rs.device) -> dict[str, list[int]]:
     }
 
 
-def select_device_serial(config: dict[str, Any]) -> str | None:
+def select_device_serial(config: dict[str, Any]) -> Optional[str]:
     serial_no = config.get("device", {}).get("serial_no")
     if serial_no is None:
         return None
@@ -325,7 +325,7 @@ def build_record(
     return payload
 
 
-def run_logger(config: dict[str, Any], print_stdout_override: bool | None = None) -> None:
+def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = None) -> None:
     calibration_cfg = config.get("calibration", {})
     filter_cfg = config.get("filter", {})
     sampling_cfg = config.get("sampling", {})
@@ -359,8 +359,8 @@ def run_logger(config: dict[str, Any], print_stdout_override: bool | None = None
     device_name = profile_device.get_info(rs.camera_info.name) if profile_device.supports(rs.camera_info.name) else "unknown"
     device_serial = profile_device.get_info(rs.camera_info.serial_number) if profile_device.supports(rs.camera_info.serial_number) else ""
 
-    first_host_timestamp_s: float | None = None
-    last_host_timestamp_s: float | None = None
+    first_host_timestamp_s: Optional[float] = None
+    last_host_timestamp_s: Optional[float] = None
     latest_accel_xyz = np.zeros(3, dtype=np.float64)
     filtered_accel_xyz = np.zeros(3, dtype=np.float64)
     latest_gyro_xyz = np.zeros(3, dtype=np.float64)

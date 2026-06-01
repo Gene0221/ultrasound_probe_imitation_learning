@@ -4,7 +4,7 @@ import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import torch
 from torch import nn
@@ -129,7 +129,7 @@ def train_model(
     )
 
     best_val_mse = float("inf")
-    best_state: dict[str, torch.Tensor] | None = None
+    best_state: Optional[dict[str, torch.Tensor]] = None
     history: list[dict[str, float]] = []
 
     for epoch in range(1, int(train_cfg["epochs"]) + 1):
