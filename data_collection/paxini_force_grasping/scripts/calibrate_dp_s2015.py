@@ -40,16 +40,11 @@ if __name__ == "__main__":
         board.get_data_points()
 
         print("Keep both DP-S2015 sensors unloaded and still.")
-        input("Press Enter to collect zero calibration...")
+        print(f"Collecting {dp.ZERO_CHECK_SAMPLES} zero-calibration samples...")
 
         calibration = board.create_zero_calibration(samples=dp.ZERO_CHECK_SAMPLES)
         dp.print_calibration_summary(calibration)
-
-        choice = input("Save this calibration? Enter y to save, other key to discard: ").strip().lower()
-        if choice in ("y", "yes"):
-            dp.save_calibration(calibration, calibration_path)
-        else:
-            print("calibration discarded")
+        dp.save_calibration(calibration, calibration_path)
     except KeyboardInterrupt:
         print("\nstop requested by user")
     finally:
