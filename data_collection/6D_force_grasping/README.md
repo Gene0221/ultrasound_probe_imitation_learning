@@ -37,8 +37,7 @@ The logger writes one JSON object per sample, including:
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/config/session_collection.yaml)
-- [config/default.json](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/config/default.json)
+- [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/config/default.yaml)
 - [scripts/read_data.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/scripts/read_data.py)
 - [scripts/zero_calibration.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/6D_force_grasping/scripts/zero_calibration.py)
 

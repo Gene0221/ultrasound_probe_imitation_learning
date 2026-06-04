@@ -40,7 +40,6 @@ The default logger also stores fields such as `tilt_deg`,
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/imu_pose_grasping/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/imu_pose_grasping/config/session_collection.yaml)
 - [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/imu_pose_grasping/config/default.yaml)
 - [scripts/log_d435i_pitch_roll.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/imu_pose_grasping/scripts/log_d435i_pitch_roll.py)
 

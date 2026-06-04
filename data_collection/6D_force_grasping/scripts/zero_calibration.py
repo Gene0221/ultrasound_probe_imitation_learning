@@ -8,7 +8,7 @@ import serial
 from kwr75b_common import load_config, print_ports, resolve_port, resolve_workspace_path, save_bias, tare_sensor
 
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "default.json"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "default.yaml"
 
 
 def parse_args() -> argparse.Namespace:

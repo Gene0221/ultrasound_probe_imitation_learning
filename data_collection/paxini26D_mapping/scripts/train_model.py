@@ -19,7 +19,7 @@ from paxini26d_mapping.training import train_model  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a mapping network from the aligned .pt dataset.")
-    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.json"))
+    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.yaml"))
     parser.add_argument("--dataset", default=None, help="Optional explicit .pt dataset path.")
     return parser.parse_args()
 

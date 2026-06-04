@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -29,7 +30,9 @@ class ControlledProcessAdapter(BaseCollectorAdapter):
             "shutdown": shutdown,
             "updated_at_monotonic_s": time.monotonic(),
         }
-        self.control_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        temp_path = self.control_file.with_name(f"{self.control_file.name}.tmp")
+        temp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        os.replace(temp_path, self.control_file)
 
     def _spawn_process(self) -> None:
         if self.config.command is None:
@@ -75,6 +78,11 @@ class ControlledProcessAdapter(BaseCollectorAdapter):
         if self.control_file is not None:
             self._write_control_state(recording=False, output_dir=None, shutdown=True)
         if self.process is not None:
+            deadline = time.monotonic() + 5.0
+            while time.monotonic() < deadline:
+                if self.process.poll() is not None:
+                    break
+                time.sleep(0.1)
             try:
                 self.process.wait(timeout=5)
             except subprocess.TimeoutExpired:

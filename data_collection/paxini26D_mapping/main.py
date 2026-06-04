@@ -14,7 +14,7 @@ from hospital_data_collection.launcher import CollectionLauncher
 
 
 def run_collection() -> None:
-    launcher = CollectionLauncher.from_config_path(WORKSPACE_ROOT / "config" / "session_collection.yaml")
+    launcher = CollectionLauncher.from_config_path(WORKSPACE_ROOT / "config" / "default.yaml")
     launcher.run_interactive()
 
 
@@ -23,7 +23,7 @@ def run_prepare_dataset() -> None:
         sys.executable,
         str(WORKSPACE_ROOT / "scripts" / "prepare_dataset.py"),
         "--config",
-        str(WORKSPACE_ROOT / "config" / "default.json"),
+        str(WORKSPACE_ROOT / "config" / "default.yaml"),
     ]
     completed = subprocess.run(command, cwd=str(WORKSPACE_ROOT), check=False, text=True)
     if completed.returncode != 0:
@@ -35,7 +35,7 @@ def run_train_model() -> None:
         sys.executable,
         str(WORKSPACE_ROOT / "scripts" / "train_model.py"),
         "--config",
-        str(WORKSPACE_ROOT / "config" / "default.json"),
+        str(WORKSPACE_ROOT / "config" / "default.yaml"),
     ]
     completed = subprocess.run(command, cwd=str(WORKSPACE_ROOT), check=False, text=True)
     if completed.returncode != 0:

@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+import yaml
 
 try:
     import serial
@@ -57,7 +58,11 @@ def parse_frame(frame: bytes):
 
 def load_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path).resolve()
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    text = config_path.read_text(encoding="utf-8")
+    if config_path.suffix.lower() == ".json":
+        payload = json.loads(text)
+    else:
+        payload = yaml.safe_load(text) or {}
     if not isinstance(payload, dict):
         raise ValueError(f"Expected config object in {config_path}")
     return payload
@@ -132,7 +137,7 @@ def resolve_port(
             raise RuntimeError("No serial ports detected. Connect the sensor and check the USB/serial adapter.")
         raise RuntimeError(
             "AUTO port selection is ambiguous because multiple serial ports are available: "
-            f"{port_rows}. Set `serial.serial_number` or `serial.port` explicitly in config/default.json."
+            f"{port_rows}. Set `serial.serial_number` or `serial.port` explicitly in config/default.yaml."
         )
     if requested not in ports:
         raise RuntimeError(f"Configured serial port '{requested}' was not found. Available ports: {port_rows}")

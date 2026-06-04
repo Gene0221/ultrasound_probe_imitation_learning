@@ -102,7 +102,8 @@ def main() -> None:
 
                 sensors = board.read_stream_sensors(timeout=1.0)
                 if not sensors:
-                    print("stream timeout")
+                    if recording:
+                        print("stream timeout")
                     continue
                 sensors = dp.apply_calibration(sensors, calibration)
                 timestamp_s = time.time()
@@ -126,7 +127,7 @@ def main() -> None:
                         elif sensor["sensor_index"] == 1:
                             write_record(right_handle, payload)
 
-                if print_human_readable:
+                if recording and print_human_readable:
                     parts = []
                     for sensor in sensors:
                         total = sensor["total_force"]

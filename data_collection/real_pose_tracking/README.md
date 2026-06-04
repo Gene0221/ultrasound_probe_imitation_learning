@@ -33,7 +33,6 @@ output/session_xxxx/
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/config/session_collection.yaml)
 - [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/config/default.yaml)
 - [scripts/controlled_real_pose_logger.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/scripts/controlled_real_pose_logger.py)
 - [src/read_franka_ee_pose.cpp](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/src/read_franka_ee_pose.cpp)

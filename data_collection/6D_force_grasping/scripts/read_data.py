@@ -20,7 +20,7 @@ from kwr75b_common import (
 )
 
 
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.json"
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.yaml"
 
 
 def append_jsonl(handle: Any, timestamp_s: float, raw: tuple[float, ...], zeroed: tuple[float, ...]) -> None:
@@ -71,7 +71,8 @@ def read_kwr75b(
     buffer = bytearray()
     ser.reset_input_buffer()
     print(f"send command: {command.hex(' ')}")
-    print("keys: q=quit")
+    if control_file is None:
+        print("keys: q=quit")
 
     output_dir = resolve_workspace_path(output_root)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -114,7 +115,8 @@ def read_kwr75b(
             try:
                 raw = read_one_sample(ser, buffer, command, request_mode, debug=debug)
             except ValueError as exc:
-                print(exc)
+                if recording:
+                    print(exc)
                 continue
 
             fx, fy, fz, mx, my, mz = tuple(raw[i] - bias[i] for i in range(6))
@@ -122,7 +124,7 @@ def read_kwr75b(
             if recording and log_handle is not None:
                 append_jsonl(log_handle, timestamp_s, raw, (fx, fy, fz, mx, my, mz))
 
-            if print_human_readable:
+            if recording and print_human_readable:
                 print(
                     f"raw kg/kg*m: "
                     f"Fx={raw[0]:.4f}, Fy={raw[1]:.4f}, Fz={raw[2]:.4f}, "

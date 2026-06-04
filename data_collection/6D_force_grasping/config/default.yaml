@@ -16,10 +16,25 @@ modules:
       - python
       - scripts/zero_calibration.py
       - --config
-      - config/default.json
+      - config/default.yaml
     command:
       - python
       - scripts/read_data.py
       - --config
-      - config/default.json
+      - config/default.yaml
     workdir: .
+
+sampling_hz: 30.0
+file_name: force6d.jsonl
+print_human_readable: true
+
+calibration:
+  bias_file: config/zero_bias.json
+  tare_samples: 100
+
+serial:
+  port: AUTO
+  serial_number: AB0KU8NU
+  baudrate: 460800
+  request_mode: true
+  debug: false

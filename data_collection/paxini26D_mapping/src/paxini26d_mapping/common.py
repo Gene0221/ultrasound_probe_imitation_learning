@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Union
+import yaml
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -21,10 +22,14 @@ def resolve_from(root: Path, path_value: Union[str, Path]) -> Path:
     return (root / path).resolve()
 
 
-def load_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def load_config_file(path: Path) -> dict[str, Any]:
+    text = path.read_text(encoding="utf-8")
+    if path.suffix.lower() == ".json":
+        payload = json.loads(text)
+    else:
+        payload = yaml.safe_load(text) or {}
     if not isinstance(payload, dict):
-        raise ValueError(f"Expected JSON object in {path}")
+        raise ValueError(f"Expected config mapping in {path}")
     return payload
 
 

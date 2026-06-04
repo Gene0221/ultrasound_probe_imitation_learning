@@ -16,10 +16,26 @@ modules:
       - python
       - scripts/calibrate_dp_s2015.py
       - --config
-      - config/default.json
+      - config/default.yaml
     command:
       - python
       - scripts/log_paxini_force.py
       - --config
-      - config/default.json
+      - config/default.yaml
     workdir: .
+
+left_file_name: left_sensor.jsonl
+right_file_name: right_sensor.jsonl
+print_human_readable: true
+
+stream:
+  sampling_hz: 30.0
+
+calibration:
+  file: config/dp_s2015_calibration.json
+  tare_samples: 30
+
+serial:
+  port: AUTO
+  serial_number: D4B86775660C
+  baudrate: 921600

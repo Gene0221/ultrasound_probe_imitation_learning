@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import torch
 
-from .common import ensure_dir, load_json, save_json
+from .common import ensure_dir, load_config_file, save_json
 
 
 @dataclass
@@ -171,4 +171,4 @@ def build_dataset(
 
 
 def load_mapping_config(config_path: Path) -> dict[str, Any]:
-    return load_json(config_path)
+    return load_config_file(config_path)

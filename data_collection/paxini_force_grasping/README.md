@@ -40,8 +40,7 @@ Each record includes:
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/config/session_collection.yaml)
-- [config/default.json](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/config/default.json)
+- [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/config/default.yaml)
 - [scripts/calibrate_dp_s2015.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/scripts/calibrate_dp_s2015.py)
 - [scripts/log_paxini_force.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini_force_grasping/scripts/log_paxini_force.py)
 

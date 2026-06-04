@@ -1,0 +1,145 @@
+output_root: sessions
+logging_root: logs
+
+behavior:
+  allow_degraded_start: true
+  start_pause_key: ENTER
+  quit_key: q
+
+modules:
+  imu:
+    enabled: true
+    adapter: imu
+    allow_placeholder: false
+    output_subdir: imu
+    initialize_command: null
+    command:
+      - python
+      - scripts/log_d435i_pitch_roll.py
+      - --config
+      - config/default.yaml
+    workdir: ../imu_pose_grasping
+
+  paxini:
+    enabled: true
+    adapter: paxini_force
+    allow_placeholder: false
+    output_subdir: paxini
+    initialize_command:
+      - python
+      - scripts/calibrate_dp_s2015.py
+      - --config
+      - config/default.yaml
+    command:
+      - python
+      - scripts/log_paxini_force.py
+      - --config
+      - config/default.yaml
+    workdir: ../paxini_force_grasping
+
+  force6d:
+    enabled: true
+    adapter: force6d
+    allow_placeholder: false
+    output_subdir: force6d
+    initialize_command:
+      - python
+      - scripts/zero_calibration.py
+      - --config
+      - config/default.yaml
+    command:
+      - python
+      - scripts/read_data.py
+      - --config
+      - config/default.yaml
+    workdir: ../6D_force_grasping
+
+paths:
+  sessions_root: sessions
+  calibration_root: calibrations
+  dataset_root: dataset
+  model_root: model
+
+alignment:
+  max_time_delta_s: 0.05
+
+collect:
+  session_prefix: session_
+  termination_grace_s: 5.0
+  python_executable: python
+  modules:
+    imu:
+      workspace_root: ../imu_pose_grasping
+      script_path: scripts/log_d435i_pitch_roll.py
+      base_config_path: config/default.yaml
+      output_subdir: imu
+    paxini:
+      workspace_root: ../paxini_force_grasping
+      script_path: scripts/log_paxini_force.py
+      base_config_path: config/default.yaml
+      output_subdir: paxini
+      print_human_readable: false
+    force6d:
+      workspace_root: ../6D_force_grasping
+      script_path: scripts/read_data.py
+      base_config_path: config/default.yaml
+      output_subdir: force6d
+      print_human_readable: false
+
+calibration:
+  run_prefix: calibration_
+  python_executable: python
+  modules:
+    paxini:
+      workspace_root: ../paxini_force_grasping
+      script_path: scripts/calibrate_dp_s2015.py
+      base_config_path: config/default.yaml
+      artifact_paths:
+        - config/dp_s2015_calibration.json
+    force6d:
+      workspace_root: ../6D_force_grasping
+      script_path: scripts/zero_calibration.py
+      base_config_path: config/default.yaml
+      artifact_paths:
+        - config/zero_bias.json
+
+dataset:
+  output_file_name: all_sessions.pt
+  force6d_file_name: force6d.jsonl
+  imu_file_name: imu_pitch_roll.jsonl
+  paxini_left_file_name: left_sensor.jsonl
+  paxini_right_file_name: right_sensor.jsonl
+
+inference:
+  sessions_root: inference_sessions
+  session_prefix: inference_
+  collect:
+    termination_grace_s: 5.0
+    python_executable: python
+    modules:
+      imu:
+        workspace_root: ../imu_pose_grasping
+        script_path: scripts/log_d435i_pitch_roll.py
+        base_config_path: config/default.yaml
+        output_subdir: imu
+        print_stdout: false
+      paxini:
+        workspace_root: ../paxini_force_grasping
+        script_path: scripts/log_paxini_force.py
+        base_config_path: config/default.yaml
+        output_subdir: paxini
+        print_human_readable: false
+
+training:
+  seed: 7
+  batch_size: 128
+  epochs: 120
+  learning_rate: 0.001
+  weight_decay: 1.0e-05
+  hidden_dims:
+    - 128
+    - 128
+    - 64
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15

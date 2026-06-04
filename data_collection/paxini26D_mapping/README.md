@@ -48,8 +48,7 @@ to run the trained mapping model on those collected IMU + Paxini signals.
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/config/session_collection.yaml)
-- [config/default.json](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/config/default.json)
+- [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/config/default.yaml)
 - [scripts/prepare_dataset.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/scripts/prepare_dataset.py)
 - [scripts/train_model.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/scripts/train_model.py)
 - [scripts/predict_force.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/scripts/predict_force.py)

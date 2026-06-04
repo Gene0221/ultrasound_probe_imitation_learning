@@ -13,7 +13,7 @@ from hospital_data_collection.launcher import CollectionLauncher
 
 
 def main() -> None:
-    launcher = CollectionLauncher.from_config_path(WORKSPACE_ROOT / "config" / "session_collection.yaml")
+    launcher = CollectionLauncher.from_config_path(WORKSPACE_ROOT / "config" / "default.yaml")
     launcher.run_interactive()
 
 

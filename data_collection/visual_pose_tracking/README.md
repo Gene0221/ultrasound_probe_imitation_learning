@@ -34,7 +34,6 @@ calibration and learning pipelines.
 ## Important Files
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/visual_pose_tracking/main.py)
-- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/visual_pose_tracking/config/session_collection.yaml)
 - [config/apriltag_tracking.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/visual_pose_tracking/config/apriltag_tracking.yaml)
 - [scripts/track_apriltag_pose_deltas.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/visual_pose_tracking/scripts/track_apriltag_pose_deltas.py)
 - [scripts/test_apriltag_pose_single_camera.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/visual_pose_tracking/scripts/test_apriltag_pose_single_camera.py)

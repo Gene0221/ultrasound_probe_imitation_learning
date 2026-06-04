@@ -16,7 +16,7 @@ from paxini26d_mapping.dataset import build_dataset, load_mapping_config  # noqa
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Align all sessions and export a training dataset.")
-    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.json"))
+    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.yaml"))
     return parser.parse_args()
 
 

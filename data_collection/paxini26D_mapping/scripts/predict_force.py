@@ -15,7 +15,7 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from paxini26d_mapping.common import ensure_dir, load_json, resolve_from, save_json  # noqa: E402
+from paxini26d_mapping.common import ensure_dir, load_config_file, resolve_from, save_json  # noqa: E402
 from paxini26d_mapping.dataset import nearest_record, parse_timed_records  # noqa: E402
 from paxini26d_mapping.training import MLPRegressor  # noqa: E402
 
@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a trained Paxini+IMU mapping model on collected inference inputs."
     )
-    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.json"))
+    parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.yaml"))
     parser.add_argument(
         "--session",
         default=None,
@@ -156,7 +156,7 @@ def write_csv(path: Path, records: list[dict[str, Any]], target_names: list[str]
 
 def main() -> None:
     args = parse_args()
-    config = load_json(resolve_from(PROJECT_ROOT, args.config))
+    config = load_config_file(resolve_from(PROJECT_ROOT, args.config))
     dataset_cfg = config["dataset"]
     max_delta_s = (
         float(args.max_time_delta_s)

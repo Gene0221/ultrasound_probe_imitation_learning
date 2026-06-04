@@ -29,12 +29,12 @@ modules:
       - python
       - scripts/calibrate_dp_s2015.py
       - --config
-      - config/default.json
+      - config/default.yaml
     command:
       - python
       - scripts/log_paxini_force.py
       - --config
-      - config/default.json
+      - config/default.yaml
     workdir: ../paxini_force_grasping
 
   imu:

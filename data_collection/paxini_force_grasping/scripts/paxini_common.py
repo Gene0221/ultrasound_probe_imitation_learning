@@ -4,17 +4,22 @@ import importlib.util
 import json
 from pathlib import Path
 from typing import Any, Union
+import yaml
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.json"
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.yaml"
 MODULE_PATH = SCRIPT_DIR / "DP-S2015-Elite.py"
 
 
 def load_config(path: Union[str, Path]) -> dict[str, Any]:
     config_path = Path(path).resolve()
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    text = config_path.read_text(encoding="utf-8")
+    if config_path.suffix.lower() == ".json":
+        payload = json.loads(text)
+    else:
+        payload = yaml.safe_load(text) or {}
     if not isinstance(payload, dict):
         raise ValueError(f"Expected config object in {config_path}")
     return payload
