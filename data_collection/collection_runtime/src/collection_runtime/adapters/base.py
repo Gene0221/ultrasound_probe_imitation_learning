@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import subprocess
 
-from hospital_data_collection.config import ModuleConfig
-from hospital_data_collection.metadata import write_json
+from collection_runtime.config import ModuleConfig
+from collection_runtime.metadata import write_json
 
 
 @dataclass

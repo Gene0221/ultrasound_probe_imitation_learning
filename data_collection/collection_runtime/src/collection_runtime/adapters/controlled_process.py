@@ -6,8 +6,8 @@ from pathlib import Path
 import subprocess
 import time
 
-from hospital_data_collection.adapters.base import BaseCollectorAdapter, ModuleRuntimeStatus
-from hospital_data_collection.metadata import ensure_dir
+from collection_runtime.adapters.base import BaseCollectorAdapter, ModuleRuntimeStatus
+from collection_runtime.metadata import ensure_dir
 
 
 class ControlledProcessAdapter(BaseCollectorAdapter):

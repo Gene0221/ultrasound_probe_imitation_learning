@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hospital_data_collection.adapters.base import BaseCollectorAdapter, ModuleRuntimeStatus
+from collection_runtime.adapters.base import BaseCollectorAdapter, ModuleRuntimeStatus
 class PlaceholderAdapter(BaseCollectorAdapter):
     def initialize(self) -> ModuleRuntimeStatus:
         self.status = ModuleRuntimeStatus(

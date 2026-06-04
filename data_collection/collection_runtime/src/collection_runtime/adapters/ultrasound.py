@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hospital_data_collection.adapters.placeholder import PlaceholderAdapter
+from collection_runtime.adapters.placeholder import PlaceholderAdapter
 
 
 class UltrasoundAdapter(PlaceholderAdapter):

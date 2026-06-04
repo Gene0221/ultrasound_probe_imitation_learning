@@ -4,6 +4,10 @@ This workspace is the hospital-facing integrated collector. It starts the
 currently selected hospital collection modules and manages them with the unified
 session controller.
 
+The shared controller itself now lives in:
+
+- [collection_runtime/src/collection_runtime](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/collection_runtime/src/collection_runtime)
+
 ## Controlled Modules
 
 - `visual_pose`
@@ -28,7 +32,7 @@ python main.py
 - `Enter` starts a new `session_xxxx`
 - `Enter` again pauses and closes the current session
 - `Enter` again resumes into the next session
-- `q` stops the whole run
+- `q` stops the whole run immediately
 
 Pausing and resuming do not reinitialize devices.
 
@@ -51,9 +55,9 @@ Run-level logs are written under `logs/`.
 
 - [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/main.py)
 - [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/config/default.yaml)
-- [src/hospital_data_collection/launcher.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/src/hospital_data_collection/launcher.py)
-- [src/hospital_data_collection/session_manager.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/src/hospital_data_collection/session_manager.py)
-- [src/hospital_data_collection/adapters](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/src/hospital_data_collection/adapters)
+- [collection_runtime/src/collection_runtime/launcher.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/collection_runtime/src/collection_runtime/launcher.py)
+- [collection_runtime/src/collection_runtime/session_manager.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/collection_runtime/src/collection_runtime/session_manager.py)
+- [collection_runtime/src/collection_runtime/adapters](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/collection_runtime/src/collection_runtime/adapters)
 
-`main.py` is the only user-facing entrypoint. The implementation lives under
-`src/hospital_data_collection/`.
+`main.py` is the only user-facing entrypoint here. The shared implementation is
+provided by `collection_runtime`.

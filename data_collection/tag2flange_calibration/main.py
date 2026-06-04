@@ -17,6 +17,45 @@ REAL_SCRIPT = REAL_WORKSPACE_ROOT / "scripts" / "controlled_real_pose_logger.py"
 SOLVER_SCRIPT = WORKSPACE_ROOT / "scripts" / "solve_tag2flange_calibration.py"
 
 
+def read_single_key() -> str:
+    if sys.platform.startswith("win"):
+        import msvcrt
+
+        while True:
+            key = msvcrt.getwch()
+            if key in {"\x00", "\xe0"}:
+                msvcrt.getwch()
+                continue
+            if key == "\r":
+                return "ENTER"
+            if key == "\x03":
+                raise KeyboardInterrupt
+            return key.lower()
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        while True:
+            key = sys.stdin.read(1)
+            if key == "\x1b":
+                next_char = sys.stdin.read(1)
+                if next_char == "[":
+                    sys.stdin.read(1)
+                    continue
+                continue
+            if key in {"\r", "\n"}:
+                return "ENTER"
+            if key == "\x03":
+                raise KeyboardInterrupt
+            return key.lower()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
 def write_control(path: Path, recording: bool, output_dir: Path | None, shutdown: bool) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
@@ -45,12 +84,12 @@ def terminate_process(process: subprocess.Popen[str] | None, timeout_s: float = 
 
 
 def wait_for_quit() -> None:
-    print("[INFO] Tag2flange collection is running. Press q then Enter to stop and solve calibration.")
+    print("[INFO] Tag2flange collection is running. Press q to stop and solve calibration.")
     while True:
-        user_input = input("> ").strip().lower()
+        user_input = read_single_key()
         if user_input == "q":
+            print()
             return
-        print("Unsupported input. Use q to stop collection and start calibration.")
 
 
 def solve_calibration(output_root: Path, visual_output: Path, real_output: Path) -> None:

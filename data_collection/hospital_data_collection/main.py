@@ -5,11 +5,11 @@ from pathlib import Path
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent
-SRC_ROOT = WORKSPACE_ROOT / "src"
+SRC_ROOT = WORKSPACE_ROOT.parent / "collection_runtime" / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from hospital_data_collection.launcher import CollectionLauncher
+from collection_runtime.launcher import CollectionLauncher
 
 
 def main() -> None:

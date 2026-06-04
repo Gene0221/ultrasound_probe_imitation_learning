@@ -15,7 +15,7 @@ python main.py
 1. starts controlled visual pose tracking
 2. starts controlled real pose tracking
 3. begins recording immediately
-4. waits until you press `q` then `Enter`
+4. waits until you press `q`
 5. stops both trackers
 6. automatically runs the calibration solver
 

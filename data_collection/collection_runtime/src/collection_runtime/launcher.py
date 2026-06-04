@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
-from hospital_data_collection.adapters import (
+from collection_runtime.adapters import (
     Force6DAdapter,
     ImuAdapter,
     PaxiniForceAdapter,
@@ -11,11 +12,11 @@ from hospital_data_collection.adapters import (
     UltrasoundAdapter,
     VisualPoseAdapter,
 )
-from hospital_data_collection.adapters.base import BaseCollectorAdapter
-from hospital_data_collection.config import LauncherConfig, ModuleConfig, load_launcher_config
-from hospital_data_collection.metadata import ModuleStatusRecord, RunMetadataRecorder, SessionMetadataRecorder
-from hospital_data_collection.session_manager import SessionContext, SessionManager
-from hospital_data_collection.state_machine import LauncherState, StateMachine
+from collection_runtime.adapters.base import BaseCollectorAdapter
+from collection_runtime.config import LauncherConfig, ModuleConfig, load_launcher_config
+from collection_runtime.metadata import ModuleStatusRecord, RunMetadataRecorder, SessionMetadataRecorder
+from collection_runtime.session_manager import SessionContext, SessionManager
+from collection_runtime.state_machine import LauncherState, StateMachine
 
 
 ADAPTER_REGISTRY = {
@@ -32,6 +33,45 @@ ADAPTER_REGISTRY = {
 class ActiveSession:
     context: SessionContext
     recorder: SessionMetadataRecorder
+
+
+def read_single_key() -> str:
+    if sys.platform.startswith("win"):
+        import msvcrt
+
+        while True:
+            key = msvcrt.getwch()
+            if key in {"\x00", "\xe0"}:
+                msvcrt.getwch()
+                continue
+            if key == "\r":
+                return "ENTER"
+            if key == "\x03":
+                raise KeyboardInterrupt
+            return key.lower()
+
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        while True:
+            key = sys.stdin.read(1)
+            if key == "\x1b":
+                next_char = sys.stdin.read(1)
+                if next_char == "[":
+                    sys.stdin.read(1)
+                    continue
+                continue
+            if key in {"\r", "\n"}:
+                return "ENTER"
+            if key == "\x03":
+                raise KeyboardInterrupt
+            return key.lower()
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 class CollectionLauncher:
@@ -81,20 +121,25 @@ class CollectionLauncher:
     def run_interactive(self) -> None:
         self.initialize()
         print("Initialization complete.")
-        print("Press Enter to start/pause/resume. Press q then Enter to quit.")
+        print("Press Enter to start/pause/resume. Press q to quit.")
 
-        while self.state_machine.state != LauncherState.STOPPED:
-            user_input = input("> ").strip().lower()
-            if user_input == self.config.behavior.quit_key.lower():
-                self.stop()
-                break
-            if user_input == "":
-                if self.state_machine.state in {LauncherState.IDLE, LauncherState.PAUSED}:
-                    self.start_or_resume()
-                elif self.state_machine.state == LauncherState.RECORDING:
-                    self.pause()
-                continue
-            print("Unsupported input. Use Enter to toggle recording or q to quit.")
+        try:
+            while self.state_machine.state != LauncherState.STOPPED:
+                user_input = read_single_key()
+                if user_input == self.config.behavior.quit_key.lower():
+                    print()
+                    self.stop()
+                    break
+                if user_input == "ENTER":
+                    print()
+                    if self.state_machine.state in {LauncherState.IDLE, LauncherState.PAUSED}:
+                        self.start_or_resume()
+                    elif self.state_machine.state == LauncherState.RECORDING:
+                        self.pause()
+                    continue
+        except KeyboardInterrupt:
+            print()
+            self.stop()
 
     def start_or_resume(self) -> None:
         was_paused = self.state_machine.state == LauncherState.PAUSED
