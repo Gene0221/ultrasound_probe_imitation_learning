@@ -58,13 +58,14 @@ class BaseCollectorAdapter(ABC):
     def health_check(self) -> ModuleRuntimeStatus:
         return self.status
 
-    def run_initialize_command(self) -> None:
-        if self.config.initialize_command is None:
+    def run_initialize_command(self, command: list[str] | None = None) -> None:
+        effective_command = command if command is not None else self.config.initialize_command
+        if effective_command is None:
             return
         if self.config.workdir is None:
             raise RuntimeError(f"Module '{self.name}' has an initialize_command but no workdir.")
         subprocess.run(
-            self.config.initialize_command,
+            effective_command,
             cwd=self.config.workdir,
             check=True,
         )

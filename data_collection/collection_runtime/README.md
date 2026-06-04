@@ -23,3 +23,8 @@ It provides the neutral common layer for:
 This package exists so collection modules do not depend on the hospital-specific
 workspace. Both single-module and integrated collection entrypoints import this
 shared runtime instead.
+
+When a single-module workspace starts, it uses that module's own
+`config/default.yaml` directly. When an integrated workspace starts, any extra
+fields declared under its top-level `modules.<module_name>` entry are merged
+into the called submodule config before launch.

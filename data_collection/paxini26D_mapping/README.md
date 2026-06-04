@@ -26,6 +26,12 @@ The collection stage uses the same session controls as the hospital workspace:
 - `Enter` again to resume into the next session
 - `q` to stop the whole run
 
+When this integrated workspace launches child modules, the top-level
+`modules.*` entries in [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/paxini26D_mapping/config/default.yaml)
+act as the effective runtime config for those children. For example, the
+current 26D config disables human-readable terminal streaming for Paxini and
+6D force, and disables IMU stdout printing during integrated collection.
+
 ## Output Layout
 
 - raw sessions: `sessions/session_xxxx/`

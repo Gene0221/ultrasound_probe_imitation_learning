@@ -36,6 +36,11 @@ python main.py
 
 Pausing and resuming do not reinitialize devices.
 
+If this integrated workspace needs behavior that differs from a child module's
+standalone defaults, put the override directly under that module's top-level
+entry in [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/config/default.yaml).
+The runtime will merge those values into the called child config before launch.
+
 ## Output
 
 Each session is written under:

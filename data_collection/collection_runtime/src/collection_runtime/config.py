@@ -24,6 +24,7 @@ class ModuleConfig:
     initialize_command: list[str] | None
     command: list[str] | None
     workdir: Path | None
+    config_overrides: dict[str, Any]
     placeholder_reason: str | None = None
 
 
@@ -68,6 +69,16 @@ def load_launcher_config(config_path: str | Path) -> LauncherConfig:
         raise ValueError("'modules' must be a mapping.")
 
     modules: list[ModuleConfig] = []
+    reserved_module_keys = {
+        "enabled",
+        "adapter",
+        "allow_placeholder",
+        "output_subdir",
+        "initialize_command",
+        "command",
+        "workdir",
+        "placeholder_reason",
+    }
     for module_name, module_payload in modules_payload.items():
         if not isinstance(module_payload, dict):
             raise ValueError(f"Module '{module_name}' config must be a mapping.")
@@ -81,6 +92,11 @@ def load_launcher_config(config_path: str | Path) -> LauncherConfig:
                 initialize_command=_ensure_list_or_none(module_payload.get("initialize_command")),
                 command=_ensure_list_or_none(module_payload.get("command")),
                 workdir=_resolve_optional_path(project_root, module_payload.get("workdir")),
+                config_overrides={
+                    key: value
+                    for key, value in module_payload.items()
+                    if key not in reserved_module_keys
+                },
                 placeholder_reason=module_payload.get("placeholder_reason"),
             )
         )
