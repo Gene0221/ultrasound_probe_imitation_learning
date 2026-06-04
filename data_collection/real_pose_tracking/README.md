@@ -1,99 +1,42 @@
-# Real Pose Tracking Workspace
+# real_pose_tracking
 
-This workspace reads end-effector poses directly from a Franka Emika Panda
-robot through the official C++ `libfranka` interface and writes pose-delta
-records at a user-level rate of 30 Hz.
+This workspace collects Franka end-effector pose deltas under the unified
+session controller.
 
-## Directory Layout
+The low-level pose logger is still backed by the C++ `libfranka` executable,
+but the user-facing collection interface is now standardized.
+
+## Main Entrypoint
+
+```powershell
+cd C:\Users\zhj80\OneDrive\Desktop\Master Course Material\research\data_collection\real_pose_tracking
+python main.py
+```
+
+## Control Logic
+
+- `Enter` starts a new `session_xxxx`
+- `Enter` again pauses and closes the current session
+- `Enter` again resumes into the next session
+- `q` stops the whole run
+
+## Output
+
+Each session is written under:
 
 ```text
-real_pose_track/
-  CMakeLists.txt
-  build.sh
-  config/
-    default.yaml
-  launch.sh
-  src/
-    read_franka_ee_pose.cpp
-  output/
-  README.md
+output/session_xxxx/
+  franka_ee_pose_deltas.jsonl
+  summary.json
 ```
 
-## Output Protocol
+## Important Files
 
-The logger writes one JSON object per line to a JSONL file. Each record follows
-the same pose-delta style used by the visual pose tracking workspace and
-contains:
+- [main.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/main.py)
+- [config/session_collection.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/config/session_collection.yaml)
+- [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/config/default.yaml)
+- [scripts/controlled_real_pose_logger.py](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/scripts/controlled_real_pose_logger.py)
+- [src/read_franka_ee_pose.cpp](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/real_pose_tracking/src/read_franka_ee_pose.cpp)
 
-- `host_timestamp_s`
-- `prev_host_timestamp_s`
-- `curr_host_timestamp_s`
-- `delta_transform_prev_to_curr`
-- `delta_translation_xyz`
-- `delta_quaternion_xyzw`
-
-## Configuration
-
-All runtime parameters live in [config/default.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/tracking/config/default.yaml), including:
-
-- robot IP
-- connection timeout
-- target sample rate
-- pose source field
-- output directory and file names
-- optional sample limit
-
-## Build
-
-This workspace expects:
-
-- `libfranka`
-- `yaml-cpp`
-- a CMake toolchain with C++17 support
-
-Example:
-
-```bash
-bash data_collection/tracking/build.sh
-```
-
-Equivalent manual commands:
-
-```bash
-cmake -S data_collection/tracking -B data_collection/tracking/build
-cmake --build data_collection/tracking/build -j
-```
-
-The build produces one executable:
-
-- `read_franka_ee_pose`
-
-## Launch
-
-On Linux:
-
-```bash
-bash data_collection/tracking/launch.sh
-```
-
-or after making it executable:
-
-```bash
-chmod +x data_collection/tracking/launch.sh
-./data_collection/tracking/launch.sh
-```
-
-The launch script automatically:
-
-- locates the built executable under `build/` or `build/Release/`
-- also falls back to `src/` if you compile the binary there manually
-- uses `config/default.yaml` by default
-
-## Manual Usage
-
-```bash
-./data_collection/tracking/build/read_franka_ee_pose \
-  data_collection/tracking/config/default.yaml
-```
-
-Press `Ctrl+C` to stop logging.
+Use `main.py` for normal collection. The Python wrapper provides the unified
+session interface, while the C++ executable remains the low-level pose source.

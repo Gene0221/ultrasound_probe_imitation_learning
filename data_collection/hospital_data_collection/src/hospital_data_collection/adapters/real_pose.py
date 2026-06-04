@@ -1,0 +1,7 @@
+from __future__ import annotations
+
+from hospital_data_collection.adapters.controlled_process import ControlledProcessAdapter
+
+
+class RealPoseAdapter(ControlledProcessAdapter):
+    pass

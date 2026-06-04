@@ -183,6 +183,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--list-devices", action="store_true", help="Only list detected RealSense devices and exit.")
     parser.add_argument("--disable-jsonl", action="store_true", help="Disable JSONL and summary outputs.")
     parser.add_argument("--emit-stdout-records", action="store_true", help="Emit valid pose-delta records to stdout as JSON lines.")
+    parser.add_argument("--control-file", default=None, help="Optional JSON control file for start/pause/stop.")
     return parser.parse_args()
 
 
@@ -464,6 +465,15 @@ def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload) + "\n")
 
 
+def load_control_state(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {"recording": True, "output_dir": None, "shutdown": False}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Control file must contain a JSON object: {path}")
+    return payload
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
@@ -515,6 +525,7 @@ def main() -> None:
     log_stream = sys.stderr if emit_stdout_records else sys.stdout
     output_root_value = str(output_cfg.get("output_root", str(DEFAULT_OUTPUT_ROOT)))
     output_root = resolve_path(output_root_value, PROJECT_ROOT)
+    control_file = resolve_path(args.control_file, PROJECT_ROOT) if args.control_file else None
     jsonl_path: Optional[Path] = None
     summary_path: Optional[Path] = None
     if write_jsonl:
@@ -560,13 +571,59 @@ def main() -> None:
 
     previous_states: dict[int, Optional[SelectedPoseState]] = {tag_id: None for tag_id in tracked_tag_ids}
     last_processed_frame_a: Optional[int] = None
+    active_output_root: Optional[Path] = None
+    active_jsonl_path: Optional[Path] = None
+    active_summary_path: Optional[Path] = None
     records_logged = 0
     valid_delta_counts: dict[int, int] = {tag_id: 0 for tag_id in tracked_tag_ids}
+    was_recording = False
     window_name = "Dual D435i AprilTag Tracking"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+    def flush_active_summary() -> None:
+        if not write_jsonl or active_output_root is None or active_summary_path is None or active_jsonl_path is None:
+            return
+        summary = {
+            "output_root": str(active_output_root),
+            "jsonl_path": str(active_jsonl_path),
+            "camera_a_serial_no": serial_a,
+            "camera_b_serial_no": serial_b,
+            "camera_a_intrinsics_file": str(camera_a_intrinsics_path),
+            "camera_b_intrinsics_file": str(camera_b_intrinsics_path),
+            "tag_ids": sorted(tracked_tag_ids),
+            "tag_size_m": tag_size_m,
+            "records_logged": records_logged,
+            "tracking_mode": "prefer_camera_a_fallback_camera_b_skip_cross_camera_delta",
+            "valid_delta_counts": {str(k): v for k, v in valid_delta_counts.items()},
+        }
+        active_summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
     try:
         while True:
+            control_state = load_control_state(control_file)
+            if bool(control_state.get("shutdown", False)):
+                break
+            recording = bool(control_state.get("recording", control_file is None))
+            output_dir_value = control_state.get("output_dir")
+            requested_output_root = resolve_path(output_dir_value, PROJECT_ROOT) if output_dir_value else output_root
+            if recording and (not was_recording or active_output_root != requested_output_root):
+                if active_output_root is not None:
+                    flush_active_summary()
+                active_output_root = requested_output_root
+                active_output_root.mkdir(parents=True, exist_ok=True)
+                if write_jsonl:
+                    active_jsonl_path, active_summary_path = prepare_output_paths(active_output_root)
+                records_logged = 0
+                valid_delta_counts = {tag_id: 0 for tag_id in tracked_tag_ids}
+                previous_states = {tag_id: None for tag_id in tracked_tag_ids}
+            elif not recording and was_recording:
+                flush_active_summary()
+                active_output_root = None
+                active_jsonl_path = None
+                active_summary_path = None
+                previous_states = {tag_id: None for tag_id in tracked_tag_ids}
+            was_recording = recording
+
             frame_a, frame_b, sync_delta_ms = select_best_pair(worker_a.buffer, worker_b.buffer)
             if frame_a is None:
                 blank = np.zeros((480, 1280, 3), dtype=np.uint8)
@@ -615,7 +672,10 @@ def main() -> None:
                 )
 
                 previous_state = previous_states[tag_id]
-                if previous_state is not None and previous_state.source_camera == current_state.source_camera:
+                if not recording:
+                    previous_states[tag_id] = None
+                    status_lines.append(f"tag {tag_id}: paused")
+                elif previous_state is not None and previous_state.source_camera == current_state.source_camera:
                     delta_transform = invert_transform(previous_state.transform_camera_tag) @ transform_camera_tag
                     delta_quaternion = rotation_matrix_to_quaternion(delta_transform[:3, :3])
                     delta_record: dict[str, Any] = {
@@ -631,8 +691,8 @@ def main() -> None:
                         "delta_translation_xyz": delta_transform[:3, 3].tolist(),
                         "delta_quaternion_xyzw": delta_quaternion.tolist(),
                     }
-                    if write_jsonl and jsonl_path is not None:
-                        append_jsonl(jsonl_path, delta_record)
+                    if write_jsonl and active_jsonl_path is not None:
+                        append_jsonl(active_jsonl_path, delta_record)
                         records_logged += 1
                     if emit_stdout_records:
                         print(json.dumps(delta_record), flush=True)
@@ -659,6 +719,7 @@ def main() -> None:
         worker_a.join(timeout=5)
         worker_b.join(timeout=5)
         cv2.destroyAllWindows()
+        flush_active_summary()
 
         if write_jsonl and summary_path is not None and jsonl_path is not None:
             summary = {

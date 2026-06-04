@@ -1,0 +1,18 @@
+output_root: output
+logging_root: logs
+
+behavior:
+  allow_degraded_start: true
+  start_pause_key: ENTER
+  quit_key: q
+
+modules:
+  ultrasound:
+    enabled: true
+    adapter: ultrasound
+    allow_placeholder: true
+    output_subdir: .
+    initialize_command: null
+    command: null
+    workdir: ..
+    placeholder_reason: "Ultrasound acquisition backend has not been fixed yet."

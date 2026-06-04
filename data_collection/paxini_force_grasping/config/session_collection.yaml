@@ -1,0 +1,25 @@
+output_root: output
+logging_root: logs
+
+behavior:
+  allow_degraded_start: true
+  start_pause_key: ENTER
+  quit_key: q
+
+modules:
+  paxini_force:
+    enabled: true
+    adapter: paxini_force
+    allow_placeholder: false
+    output_subdir: .
+    initialize_command:
+      - python
+      - scripts/calibrate_dp_s2015.py
+      - --config
+      - config/default.json
+    command:
+      - python
+      - scripts/log_paxini_force.py
+      - --config
+      - config/default.json
+    workdir: .

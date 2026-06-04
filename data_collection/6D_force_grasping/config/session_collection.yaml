@@ -1,0 +1,25 @@
+output_root: output
+logging_root: logs
+
+behavior:
+  allow_degraded_start: true
+  start_pause_key: ENTER
+  quit_key: q
+
+modules:
+  force6d:
+    enabled: true
+    adapter: force6d
+    allow_placeholder: false
+    output_subdir: .
+    initialize_command:
+      - python
+      - scripts/zero_calibration.py
+      - --config
+      - config/default.json
+    command:
+      - python
+      - scripts/read_data.py
+      - --config
+      - config/default.json
+    workdir: .

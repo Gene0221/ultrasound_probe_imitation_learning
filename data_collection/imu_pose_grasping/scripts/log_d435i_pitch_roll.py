@@ -66,6 +66,7 @@ def parse_args() -> argparse.Namespace:
         action="store_false",
         help="Do not print emitted IMU records to stdout.",
     )
+    parser.add_argument("--control-file", default=None, help="Optional JSON control file for start/pause/stop.")
     return parser.parse_args()
 
 
@@ -289,6 +290,15 @@ def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=True) + "\n")
 
 
+def load_control_state(path: Path | None) -> dict[str, Any]:
+    if path is None or not path.exists():
+        return {"recording": True, "output_dir": None, "shutdown": False}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Control file must contain a JSON object: {path}")
+    return payload
+
+
 def ensure_output_paths(config: dict[str, Any]) -> tuple[Path, Path, Path]:
     output_cfg = config.get("output", {})
     output_root = resolve_path(str(output_cfg.get("output_root", "output")))
@@ -334,6 +344,8 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
 
     output_root, jsonl_path, summary_path = ensure_output_paths(config)
     pipeline, profile = make_pipeline(config)
+    runtime_cfg = config.get("_runtime", {})
+    control_file = resolve_path(runtime_cfg["control_file"]) if runtime_cfg.get("control_file") else None
 
     stop_requested = False
 
@@ -364,8 +376,28 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
     latest_accel_xyz = np.zeros(3, dtype=np.float64)
     filtered_accel_xyz = np.zeros(3, dtype=np.float64)
     latest_gyro_xyz = np.zeros(3, dtype=np.float64)
-    sample_count = 0
     last_emit_host_timestamp_s = 0.0
+    active_output_root: Optional[Path] = None
+    active_jsonl_path: Optional[Path] = None
+    active_summary_path: Optional[Path] = None
+    session_first_host_timestamp_s: Optional[float] = None
+    session_last_host_timestamp_s: Optional[float] = None
+    session_sample_count = 0
+
+    def flush_active_summary() -> None:
+        if active_output_root is None or active_summary_path is None:
+            return
+        session_summary_payload = {
+            "device_name": device_name,
+            "device_serial_no": device_serial,
+            "output_root": str(active_output_root),
+            "jsonl_path": str(active_jsonl_path) if active_jsonl_path is not None else None,
+            "first_host_timestamp_s": session_first_host_timestamp_s,
+            "last_host_timestamp_s": session_last_host_timestamp_s,
+            "num_records": session_sample_count,
+            "config": config,
+        }
+        write_summary(active_summary_path, session_summary_payload)
 
     try:
         print(
@@ -394,6 +426,31 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
 
         while not stop_requested:
             for sample in wait_for_motion_samples(pipeline):
+                control_state = load_control_state(control_file)
+                if bool(control_state.get("shutdown", False)):
+                    stop_requested = True
+                    break
+
+                recording = bool(control_state.get("recording", control_file is None))
+                output_dir_value = control_state.get("output_dir")
+                requested_output_root = resolve_path(output_dir_value) if output_dir_value else output_root
+                if recording and active_output_root != requested_output_root:
+                    if active_output_root is not None:
+                        flush_active_summary()
+                    active_output_root = requested_output_root
+                    active_output_root.mkdir(parents=True, exist_ok=True)
+                    active_jsonl_path = active_output_root / str(output_cfg.get("jsonl_file_name", "imu_pitch_roll.jsonl"))
+                    active_summary_path = active_output_root / str(output_cfg.get("summary_file_name", "summary.json"))
+                    session_first_host_timestamp_s = None
+                    session_last_host_timestamp_s = None
+                    session_sample_count = 0
+                    last_emit_host_timestamp_s = 0.0
+                elif not recording and active_output_root is not None:
+                    flush_active_summary()
+                    active_output_root = None
+                    active_jsonl_path = None
+                    active_summary_path = None
+
                 if "gyro" in sample.stream_name:
                     corrected_gyro = sample.xyz - gyro_bias
                     latest_gyro_xyz = corrected_gyro
@@ -428,18 +485,22 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
                 )
                 record = build_record(state, recording_cfg)
 
-                if write_jsonl:
-                    append_jsonl(jsonl_path, record)
-                if print_stdout:
+                if recording and write_jsonl and active_jsonl_path is not None:
+                    append_jsonl(active_jsonl_path, record)
+                if recording and print_stdout:
                     print(json.dumps(record, ensure_ascii=True), flush=True)
 
-                if first_host_timestamp_s is None:
-                    first_host_timestamp_s = sample.host_timestamp_s
-                last_host_timestamp_s = sample.host_timestamp_s
-                last_emit_host_timestamp_s = sample.host_timestamp_s
-                sample_count += 1
+                if recording:
+                    if first_host_timestamp_s is None:
+                        first_host_timestamp_s = sample.host_timestamp_s
+                    if session_first_host_timestamp_s is None:
+                        session_first_host_timestamp_s = sample.host_timestamp_s
+                    last_host_timestamp_s = sample.host_timestamp_s
+                    session_last_host_timestamp_s = sample.host_timestamp_s
+                    last_emit_host_timestamp_s = sample.host_timestamp_s
+                    session_sample_count += 1
 
-                if max_samples is not None and sample_count >= max_samples:
+                if recording and max_samples is not None and session_sample_count >= max_samples:
                     stop_requested = True
                     break
     finally:
@@ -450,6 +511,7 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
 
         signal.signal(signal.SIGINT, previous_sigint)
         signal.signal(signal.SIGTERM, previous_sigterm)
+        flush_active_summary()
 
         summary_payload = {
             "device_name": device_name,
@@ -458,7 +520,7 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
             "jsonl_path": str(jsonl_path),
             "first_host_timestamp_s": first_host_timestamp_s,
             "last_host_timestamp_s": last_host_timestamp_s,
-            "num_records": sample_count,
+            "num_records": None,
             "config": config,
         }
         write_summary(summary_path, summary_payload)
@@ -475,6 +537,7 @@ def main() -> None:
         return
 
     config = load_config(args.config)
+    config["_runtime"] = {"control_file": args.control_file}
     run_logger(config, print_stdout_override=args.print_stdout)
 
 
