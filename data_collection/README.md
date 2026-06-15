@@ -10,7 +10,7 @@ and post-processing workspaces.
 - `visual_pose_tracking`: standalone AprilTag visual pose tracking
 - `6D_force_grasping`: standalone 6D force collection
 - `real_pose_tracking`: standalone Franka end-effector pose collection
-- `ultrasound_image_collection`: ultrasound collection placeholder with the same control interface
+- `ultrasound_image_collection`: standalone ultrasound image collection from a USB capture device
 - `collection_runtime`: shared session-based collection runtime used by modules and integrated collectors
 - `hospital_data_collection`: integrated hospital collector for visual pose, Paxini, IMU, and ultrasound
 - `paxini26D_mapping`: integrated collect-prepare-train workspace for IMU + Paxini + 6D mapping

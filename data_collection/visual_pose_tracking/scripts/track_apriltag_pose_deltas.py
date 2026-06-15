@@ -411,12 +411,41 @@ def resize_to_height(image: np.ndarray, height: int) -> np.ndarray:
     return cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
 
 
-def draw_detections(image: np.ndarray, detections: dict[int, DetectionPose], title: str) -> np.ndarray:
+def draw_axes(
+    image: np.ndarray,
+    camera_matrix: np.ndarray,
+    dist_coeffs: np.ndarray,
+    transform_camera_tag: np.ndarray,
+    axis_length_m: float,
+) -> None:
+    rotation_matrix = transform_camera_tag[:3, :3]
+    translation_vector = transform_camera_tag[:3, 3].reshape(3, 1)
+    rotation_vector, _ = cv2.Rodrigues(rotation_matrix)
+    cv2.drawFrameAxes(
+        image,
+        camera_matrix,
+        dist_coeffs,
+        rotation_vector,
+        translation_vector,
+        axis_length_m,
+        2,
+    )
+
+
+def draw_detections(
+    image: np.ndarray,
+    detections: dict[int, DetectionPose],
+    title: str,
+    camera_matrix: np.ndarray,
+    dist_coeffs: np.ndarray,
+    axis_length_m: float,
+) -> np.ndarray:
     canvas = image.copy()
     cv2.putText(canvas, title, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
     for detection in detections.values():
         corners = detection.corners_xy.astype(int)
         cv2.polylines(canvas, [corners], True, (0, 255, 255), 2)
+        draw_axes(canvas, camera_matrix, dist_coeffs, detection.transform_camera_tag, axis_length_m)
         center = (int(detection.center_xy[0]), int(detection.center_xy[1]))
         cv2.circle(canvas, center, 4, (0, 0, 255), -1)
         label = f"id={detection.tag_id} src={detection.source_camera}"
@@ -429,14 +458,19 @@ def build_preview(
     frame_b: Optional[FrameRecord],
     detections_a: dict[int, DetectionPose],
     detections_b: dict[int, DetectionPose],
+    camera_matrix_a: np.ndarray,
+    dist_coeffs_a: np.ndarray,
+    camera_matrix_b: np.ndarray,
+    dist_coeffs_b: np.ndarray,
+    axis_length_m: float,
     preview_width: int,
     status_lines: list[str],
 ) -> np.ndarray:
     blank = np.zeros((480, 640, 3), dtype=np.uint8)
     image_a = frame_a.image if frame_a is not None else blank
     image_b = frame_b.image if frame_b is not None else blank
-    panel_a = draw_detections(image_a, detections_a, "Camera A RGB")
-    panel_b = draw_detections(image_b, detections_b, "Camera B RGB")
+    panel_a = draw_detections(image_a, detections_a, "Camera A RGB", camera_matrix_a, dist_coeffs_a, axis_length_m)
+    panel_b = draw_detections(image_b, detections_b, "Camera B RGB", camera_matrix_b, dist_coeffs_b, axis_length_m)
 
     width_each = max(1, preview_width // 2)
     panel_a = resize_to_width(panel_a, width_each)
@@ -519,6 +553,9 @@ def main() -> None:
     if tag_size_m <= 0:
         raise ValueError("tracking.tag_size_m must be positive.")
     allowed_hamming = int(tracking_cfg.get("max_hamming", 0))
+    axis_length_m = float(detector_cfg.get("axis_length_m", tag_size_m * 0.5))
+    if axis_length_m <= 0:
+        raise ValueError("apriltag.axis_length_m must be positive.")
 
     write_jsonl = bool(output_cfg.get("write_jsonl", True)) and not args.disable_jsonl
     emit_stdout_records = bool(output_cfg.get("emit_stdout_records", False)) or args.emit_stdout_records
@@ -553,8 +590,8 @@ def main() -> None:
         fps,
         log_stream,
     )
-    camera_a_intrinsics_path, camera_matrix_a, _ = load_intrinsics(camera_a_intrinsics_path, config_path.parent)
-    camera_b_intrinsics_path, camera_matrix_b, _ = load_intrinsics(camera_b_intrinsics_path, config_path.parent)
+    camera_a_intrinsics_path, camera_matrix_a, dist_coeffs_a = load_intrinsics(camera_a_intrinsics_path, config_path.parent)
+    camera_b_intrinsics_path, camera_matrix_b, dist_coeffs_b = load_intrinsics(camera_b_intrinsics_path, config_path.parent)
     print(f"[INFO] Intrinsics A: {camera_a_intrinsics_path}", file=log_stream)
     print(f"[INFO] Intrinsics B: {camera_b_intrinsics_path}", file=log_stream)
 
@@ -709,7 +746,19 @@ def main() -> None:
 
                 previous_states[tag_id] = current_state
 
-            preview = build_preview(frame_a, frame_b, detections_a, detections_b, preview_width, status_lines[:8])
+            preview = build_preview(
+                frame_a,
+                frame_b,
+                detections_a,
+                detections_b,
+                camera_matrix_a,
+                dist_coeffs_a,
+                camera_matrix_b,
+                dist_coeffs_b,
+                axis_length_m,
+                preview_width,
+                status_lines[:8],
+            )
             cv2.imshow(window_name, preview)
             if cv2.waitKey(1) & 0xFF in {ord("q"), ord("Q")}:
                 break

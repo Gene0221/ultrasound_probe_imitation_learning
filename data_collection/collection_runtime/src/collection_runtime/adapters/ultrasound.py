@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collection_runtime.adapters.placeholder import PlaceholderAdapter
+from collection_runtime.adapters.controlled_process import ControlledProcessAdapter
 
 
-class UltrasoundAdapter(PlaceholderAdapter):
+class UltrasoundAdapter(ControlledProcessAdapter):
     pass

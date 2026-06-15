@@ -10,9 +10,44 @@ modules:
   ultrasound:
     enabled: true
     adapter: ultrasound
-    allow_placeholder: true
+    allow_placeholder: false
     output_subdir: .
     initialize_command: null
-    command: null
-    workdir: ..
-    placeholder_reason: "Ultrasound acquisition backend has not been fixed yet."
+    command:
+      - python
+      - scripts/capture_ultrasound_frames.py
+      - --config
+      - config/default.yaml
+    workdir: .
+
+device:
+  path: AUTO
+  by_id: ""
+  by_path: ""
+  name_contains: ""
+  serial_number: ""
+  vendor_id: ""
+  product_id: ""
+  usb_path_contains: ""
+
+capture:
+  backend: V4L2
+  width: 640
+  height: 480
+  fps: 30.0
+  fourcc: MJPG
+
+recording:
+  target_hz: 30.0
+  include_device_name: true
+
+output:
+  output_root: output
+  images_subdir: images
+  timestamps_file_name: timestamps.jsonl
+  summary_file_name: summary.json
+  frame_prefix: frame_
+  image_format: png
+  png_compression: 3
+  jpg_quality: 95
+  print_stdout: true
