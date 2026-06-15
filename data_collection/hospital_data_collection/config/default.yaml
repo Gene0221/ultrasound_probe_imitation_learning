@@ -36,6 +36,7 @@ modules:
       - --config
       - config/default.yaml
     workdir: ../paxini_force_grasping
+    print_human_readable: false
 
   imu:
     enabled: true
@@ -49,6 +50,8 @@ modules:
       - --config
       - config/default.yaml
     workdir: ../imu_pose_grasping
+    output:
+      print_stdout: false
 
   ultrasound:
     enabled: true
@@ -62,3 +65,5 @@ modules:
       - --config
       - config/default.yaml
     workdir: ../ultrasound_image_collection
+    output:
+      print_stdout: false
