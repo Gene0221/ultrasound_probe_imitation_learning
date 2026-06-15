@@ -13,6 +13,7 @@ and post-processing workspaces.
 - `ultrasound_image_collection`: standalone ultrasound image collection from a USB capture device
 - `collection_runtime`: shared session-based collection runtime used by modules and integrated collectors
 - `hospital_data_collection`: integrated hospital collector for visual pose, Paxini, IMU, and ultrasound
+- `hospital_collection_app`: PySide6 desktop UI for the hospital integrated collector
 - `paxini26D_mapping`: integrated collect-prepare-train workspace for IMU + Paxini + 6D mapping
 - `tag2flange_calibration`: one-shot collection plus automatic tag-to-flange solve
 - `preprocessing`: offline alignment and dataset-building scripts
@@ -33,6 +34,7 @@ raw-data root.
 ## Main Entrypoints
 
 - `hospital_data_collection/main.py`
+- `hospital_collection_app/main.py`
 - `collection_runtime/src/collection_runtime/launcher.py`
 - `imu_pose_grasping/main.py`
 - `paxini_force_grasping/main.py`

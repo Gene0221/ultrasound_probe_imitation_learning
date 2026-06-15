@@ -27,6 +27,11 @@ cd C:\Users\zhj80\OneDrive\Desktop\Master Course Material\research\data_collecti
 python main.py
 ```
 
+For UI-driven control, this backend can also be launched with a JSON command
+file and JSON status file. The doctor-facing desktop app in
+[hospital_collection_app](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_collection_app/README.md)
+uses that non-interactive control path.
+
 ## Control Logic
 
 - modules initialize once at startup
