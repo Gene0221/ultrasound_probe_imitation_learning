@@ -15,8 +15,10 @@ The shared controller itself now lives in:
 - `imu`
 - `ultrasound`
 
-The current default ultrasound entry is still a placeholder. The module slot
-and session layout are already fixed so the real backend can be plugged in later.
+The ultrasound slot now launches the standalone
+[ultrasound_image_collection](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/ultrasound_image_collection/README.md)
+workspace behind the same session controller, so integrated hospital collection
+and standalone ultrasound collection share the same capture logic.
 
 ## Main Entrypoint
 
@@ -40,6 +42,10 @@ If this integrated workspace needs behavior that differs from a child module's
 standalone defaults, put the override directly under that module's top-level
 entry in [config/default.yaml](/C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/hospital_data_collection/config/default.yaml).
 The runtime will merge those values into the called child config before launch.
+
+This is also how you should override Ubuntu ultrasound capture settings inside
+the integrated collector, for example `device.by_id`, `device.path`, or
+`recording.target_hz`, without changing the standalone ultrasound workspace.
 
 ## Output
 

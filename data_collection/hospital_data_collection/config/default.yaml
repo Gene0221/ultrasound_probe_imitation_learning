@@ -53,9 +53,12 @@ modules:
   ultrasound:
     enabled: true
     adapter: ultrasound
-    allow_placeholder: true
+    allow_placeholder: false
     output_subdir: ultrasound
     initialize_command: null
-    command: null
-    workdir: null
-    placeholder_reason: "Ultrasound collection workspace is not fixed yet."
+    command:
+      - python
+      - scripts/capture_ultrasound_frames.py
+      - --config
+      - config/default.yaml
+    workdir: ../ultrasound_image_collection
