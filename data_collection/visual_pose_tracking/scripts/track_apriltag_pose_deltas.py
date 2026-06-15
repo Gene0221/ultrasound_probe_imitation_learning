@@ -667,15 +667,12 @@ def main() -> None:
                 active_output_root.mkdir(parents=True, exist_ok=True)
                 if write_jsonl:
                     active_jsonl_path, active_states_path, active_summary_path = prepare_output_paths(active_output_root)
-                    print(f"[INFO] Recording outputs opened under: {active_output_root}", file=log_stream)
                 records_logged = 0
                 state_records_logged = 0
                 valid_delta_counts = {tag_id: 0 for tag_id in tracked_tag_ids}
                 previous_states = {tag_id: None for tag_id in tracked_tag_ids}
             elif not recording and was_recording:
                 flush_active_summary()
-                if active_output_root is not None:
-                    print(f"[INFO] Recording outputs finalized under: {active_output_root}", file=log_stream)
                 active_output_root = None
                 active_jsonl_path = None
                 active_states_path = None

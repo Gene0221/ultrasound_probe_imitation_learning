@@ -25,7 +25,7 @@ device:
   by_id: ""
   by_path: ""
   name_contains: ""
-  serial_number: ""
+  serial_number: "20200909"
   vendor_id: ""
   product_id: ""
   usb_path_contains: ""

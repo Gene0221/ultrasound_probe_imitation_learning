@@ -176,6 +176,7 @@ class CollectionLauncher:
         self.state_machine.pause()
 
     def stop(self) -> None:
+        last_session_id = self.run_metadata.session_ids[-1] if self.run_metadata.session_ids else None
         if self.active_session is not None:
             for adapter in self.adapters:
                 adapter.pause_recording()
@@ -188,4 +189,10 @@ class CollectionLauncher:
 
         self.state_machine.stop()
         self.run_metadata.finish()
+        if last_session_id is not None:
+            last_session_root = self.session_manager.output_root / last_session_id
+            print("Final output directories:")
+            for adapter in self.adapters:
+                module_dir = last_session_root / adapter.output_subdir
+                print(f"  {adapter.name}: {module_dir}")
         print("Collection launcher stopped.")
