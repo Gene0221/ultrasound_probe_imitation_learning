@@ -39,9 +39,11 @@ def main() -> None:
     calibration_path = configure_dp_module(dp, config)
 
     output_root = resolve_workspace_path(config.get("output_root", "output"))
-    output_root.mkdir(parents=True, exist_ok=True)
     print_human_readable = bool(config.get("print_human_readable", True))
     control_file = Path(args.control_file).resolve() if args.control_file else None
+    controlled_mode = control_file is not None
+    if not controlled_mode:
+        output_root.mkdir(parents=True, exist_ok=True)
 
     board = dp.HandBoard(port=dp.PORT)
     stop_requested = False
@@ -79,8 +81,10 @@ def main() -> None:
                 recording = bool(control_state.get("recording", control_file is None))
                 output_dir_value = control_state.get("output_dir")
                 requested_output_dir = Path(output_dir_value).resolve() if output_dir_value else output_root
+                if controlled_mode and output_dir_value is None:
+                    requested_output_dir = None
 
-                if recording and active_output_dir != requested_output_dir:
+                if recording and requested_output_dir is not None and active_output_dir != requested_output_dir:
                     if left_handle is not None:
                         left_handle.close()
                     if right_handle is not None:
@@ -91,7 +95,7 @@ def main() -> None:
                     left_handle = left_path.open("w", encoding="utf-8")
                     right_handle = right_path.open("w", encoding="utf-8")
                     active_output_dir = requested_output_dir
-                elif not recording and active_output_dir is not None:
+                elif (not recording or requested_output_dir is None) and active_output_dir is not None:
                     if left_handle is not None:
                         left_handle.close()
                         left_handle = None

@@ -302,7 +302,6 @@ def load_control_state(path: Path | None) -> dict[str, Any]:
 def ensure_output_paths(config: dict[str, Any]) -> tuple[Path, Path, Path]:
     output_cfg = config.get("output", {})
     output_root = resolve_path(str(output_cfg.get("output_root", "output")))
-    output_root.mkdir(parents=True, exist_ok=True)
     jsonl_path = output_root / str(output_cfg.get("jsonl_file_name", "imu_pitch_roll.jsonl"))
     summary_path = output_root / str(output_cfg.get("summary_file_name", "summary.json"))
     config_copy_path = output_root / "resolved_config.json"
@@ -346,6 +345,9 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
     pipeline, profile = make_pipeline(config)
     runtime_cfg = config.get("_runtime", {})
     control_file = resolve_path(runtime_cfg["control_file"]) if runtime_cfg.get("control_file") else None
+    controlled_mode = control_file is not None
+    if not controlled_mode:
+        output_root.mkdir(parents=True, exist_ok=True)
 
     stop_requested = False
 
@@ -434,7 +436,9 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
                 recording = bool(control_state.get("recording", control_file is None))
                 output_dir_value = control_state.get("output_dir")
                 requested_output_root = resolve_path(output_dir_value) if output_dir_value else output_root
-                if recording and active_output_root != requested_output_root:
+                if controlled_mode and output_dir_value is None:
+                    requested_output_root = None
+                if recording and requested_output_root is not None and active_output_root != requested_output_root:
                     if active_output_root is not None:
                         flush_active_summary()
                     active_output_root = requested_output_root
@@ -445,7 +449,7 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
                     session_last_host_timestamp_s = None
                     session_sample_count = 0
                     last_emit_host_timestamp_s = 0.0
-                elif not recording and active_output_root is not None:
+                elif (not recording or requested_output_root is None) and active_output_root is not None:
                     flush_active_summary()
                     active_output_root = None
                     active_jsonl_path = None
@@ -513,20 +517,21 @@ def run_logger(config: dict[str, Any], print_stdout_override: Optional[bool] = N
         signal.signal(signal.SIGTERM, previous_sigterm)
         flush_active_summary()
 
-        summary_payload = {
-            "device_name": device_name,
-            "device_serial_no": device_serial,
-            "output_root": str(output_root),
-            "jsonl_path": str(jsonl_path),
-            "first_host_timestamp_s": first_host_timestamp_s,
-            "last_host_timestamp_s": last_host_timestamp_s,
-            "num_records": None,
-            "config": config,
-        }
-        write_summary(summary_path, summary_payload)
-        print(f"[INFO] Wrote summary: {summary_path}", file=sys.stderr)
-        if write_jsonl:
-            print(f"[INFO] Wrote JSONL: {jsonl_path}", file=sys.stderr)
+        if not controlled_mode:
+            summary_payload = {
+                "device_name": device_name,
+                "device_serial_no": device_serial,
+                "output_root": str(output_root),
+                "jsonl_path": str(jsonl_path),
+                "first_host_timestamp_s": first_host_timestamp_s,
+                "last_host_timestamp_s": last_host_timestamp_s,
+                "num_records": None,
+                "config": config,
+            }
+            write_summary(summary_path, summary_payload)
+            print(f"[INFO] Wrote summary: {summary_path}", file=sys.stderr)
+            if write_jsonl:
+                print(f"[INFO] Wrote JSONL: {jsonl_path}", file=sys.stderr)
 
 
 def main() -> None:
