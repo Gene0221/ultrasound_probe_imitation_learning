@@ -487,11 +487,14 @@ def build_preview(
     return preview
 
 
-def prepare_output_paths(output_root: Path) -> tuple[Path, Path]:
+def prepare_output_paths(output_root: Path) -> tuple[Path, Path, Path]:
     output_root.mkdir(parents=True, exist_ok=True)
     jsonl_path = output_root / "tag_pose_deltas.jsonl"
+    states_path = output_root / "tag_pose_states.jsonl"
     summary_path = output_root / "tracking_summary.json"
-    return jsonl_path, summary_path
+    jsonl_path.touch(exist_ok=True)
+    states_path.touch(exist_ok=True)
+    return jsonl_path, states_path, summary_path
 
 
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
@@ -563,16 +566,20 @@ def main() -> None:
     output_root_value = str(output_cfg.get("output_root", str(DEFAULT_OUTPUT_ROOT)))
     output_root = resolve_path(output_root_value, PROJECT_ROOT)
     control_file = resolve_path(args.control_file, PROJECT_ROOT) if args.control_file else None
+    controlled_mode = control_file is not None
     jsonl_path: Optional[Path] = None
+    states_path: Optional[Path] = None
     summary_path: Optional[Path] = None
-    if write_jsonl:
-        jsonl_path, summary_path = prepare_output_paths(output_root)
+    if write_jsonl and not controlled_mode:
+        jsonl_path, states_path, summary_path = prepare_output_paths(output_root)
 
     print(f"[INFO] Camera A serial: {serial_a}", file=log_stream)
     print(f"[INFO] Camera B serial: {serial_b}", file=log_stream)
-    if write_jsonl and jsonl_path is not None:
+    if write_jsonl and not controlled_mode and jsonl_path is not None:
         print(f"[INFO] Output directory: {output_root}", file=log_stream)
         print(f"[INFO] JSONL output: {jsonl_path}", file=log_stream)
+    elif write_jsonl and controlled_mode:
+        print("[INFO] Session-controlled recording enabled. Outputs will be created under session_xxxx/ after recording starts.", file=log_stream)
     else:
         print("[INFO] JSONL logging disabled by config.", file=log_stream)
     if emit_stdout_records:
@@ -610,19 +617,28 @@ def main() -> None:
     last_processed_frame_a: Optional[int] = None
     active_output_root: Optional[Path] = None
     active_jsonl_path: Optional[Path] = None
+    active_states_path: Optional[Path] = None
     active_summary_path: Optional[Path] = None
     records_logged = 0
+    state_records_logged = 0
     valid_delta_counts: dict[int, int] = {tag_id: 0 for tag_id in tracked_tag_ids}
     was_recording = False
     window_name = "Dual D435i AprilTag Tracking"
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     def flush_active_summary() -> None:
-        if not write_jsonl or active_output_root is None or active_summary_path is None or active_jsonl_path is None:
+        if (
+            not write_jsonl
+            or active_output_root is None
+            or active_summary_path is None
+            or active_jsonl_path is None
+            or active_states_path is None
+        ):
             return
         summary = {
             "output_root": str(active_output_root),
             "jsonl_path": str(active_jsonl_path),
+            "states_path": str(active_states_path),
             "camera_a_serial_no": serial_a,
             "camera_b_serial_no": serial_b,
             "camera_a_intrinsics_file": str(camera_a_intrinsics_path),
@@ -630,6 +646,7 @@ def main() -> None:
             "tag_ids": sorted(tracked_tag_ids),
             "tag_size_m": tag_size_m,
             "records_logged": records_logged,
+            "state_records_logged": state_records_logged,
             "tracking_mode": "prefer_camera_a_fallback_camera_b_skip_cross_camera_delta",
             "valid_delta_counts": {str(k): v for k, v in valid_delta_counts.items()},
         }
@@ -649,14 +666,19 @@ def main() -> None:
                 active_output_root = requested_output_root
                 active_output_root.mkdir(parents=True, exist_ok=True)
                 if write_jsonl:
-                    active_jsonl_path, active_summary_path = prepare_output_paths(active_output_root)
+                    active_jsonl_path, active_states_path, active_summary_path = prepare_output_paths(active_output_root)
+                    print(f"[INFO] Recording outputs opened under: {active_output_root}", file=log_stream)
                 records_logged = 0
+                state_records_logged = 0
                 valid_delta_counts = {tag_id: 0 for tag_id in tracked_tag_ids}
                 previous_states = {tag_id: None for tag_id in tracked_tag_ids}
             elif not recording and was_recording:
                 flush_active_summary()
+                if active_output_root is not None:
+                    print(f"[INFO] Recording outputs finalized under: {active_output_root}", file=log_stream)
                 active_output_root = None
                 active_jsonl_path = None
+                active_states_path = None
                 active_summary_path = None
                 previous_states = {tag_id: None for tag_id in tracked_tag_ids}
             was_recording = recording
@@ -707,6 +729,22 @@ def main() -> None:
                     host_timestamp_s=selected_frame.host_timestamp_s,
                     device_timestamp_ms=selected_frame.device_timestamp_ms,
                 )
+
+                if recording and write_jsonl and active_states_path is not None:
+                    state_record = {
+                        "tag_id": tag_id,
+                        "source_camera": current_pose.source_camera,
+                        "frame_number": current_state.frame_number,
+                        "host_timestamp_s": current_state.host_timestamp_s,
+                        "device_timestamp_ms": current_state.device_timestamp_ms,
+                        "transform_camera_tag": transform_camera_tag.tolist(),
+                        "translation_xyz": transform_camera_tag[:3, 3].tolist(),
+                        "quaternion_xyzw": rotation_matrix_to_quaternion(transform_camera_tag[:3, :3]).tolist(),
+                        "decision_margin": current_pose.decision_margin,
+                        "hamming": current_pose.hamming,
+                    }
+                    append_jsonl(active_states_path, state_record)
+                    state_records_logged += 1
 
                 previous_state = previous_states[tag_id]
                 if not recording:
@@ -770,10 +808,11 @@ def main() -> None:
         cv2.destroyAllWindows()
         flush_active_summary()
 
-        if write_jsonl and summary_path is not None and jsonl_path is not None:
+        if write_jsonl and not controlled_mode and summary_path is not None and jsonl_path is not None:
             summary = {
                 "output_root": str(output_root),
                 "jsonl_path": str(jsonl_path),
+                "states_path": str(states_path) if states_path is not None else None,
                 "camera_a_serial_no": serial_a,
                 "camera_b_serial_no": serial_b,
                 "camera_a_intrinsics_file": str(camera_a_intrinsics_path),
@@ -781,6 +820,7 @@ def main() -> None:
                 "tag_ids": sorted(tracked_tag_ids),
                 "tag_size_m": tag_size_m,
                 "records_logged": records_logged,
+                "state_records_logged": state_records_logged,
                 "tracking_mode": "prefer_camera_a_fallback_camera_b_skip_cross_camera_delta",
                 "valid_delta_counts": {str(k): v for k, v in valid_delta_counts.items()},
             }

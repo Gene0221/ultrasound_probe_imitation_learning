@@ -110,15 +110,20 @@ class ControlledProcessAdapter(BaseCollectorAdapter):
             self.run_initialize_command(self.resolved_initialize_command)
         if self.resolved_command is not None:
             self._spawn_process()
+            time.sleep(0.2)
         self.status = ModuleRuntimeStatus(
             initialized=True,
             healthy=workdir_exists,
             placeholder=self.resolved_command is None,
             message="Workspace detected." if workdir_exists else "Workspace path is missing.",
         )
+        self.health_check()
         return self.status
 
     def start_recording(self, session_dir: Path) -> None:
+        status = self.health_check()
+        if not status.healthy:
+            raise RuntimeError(f"Module '{self.name}' is not healthy: {status.message}")
         self._write_control_state(recording=True, output_dir=session_dir, shutdown=False)
         self.write_module_event(session_dir, "start", {"control_file": str(self.control_file) if self.control_file else None})
 
@@ -126,6 +131,9 @@ class ControlledProcessAdapter(BaseCollectorAdapter):
         self._write_control_state(recording=False, output_dir=None, shutdown=False)
 
     def resume_recording(self, session_dir: Path) -> None:
+        status = self.health_check()
+        if not status.healthy:
+            raise RuntimeError(f"Module '{self.name}' is not healthy: {status.message}")
         self._write_control_state(recording=True, output_dir=session_dir, shutdown=False)
         self.write_module_event(session_dir, "resume", {"control_file": str(self.control_file) if self.control_file else None})
 

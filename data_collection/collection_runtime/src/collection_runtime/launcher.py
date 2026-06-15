@@ -114,6 +114,9 @@ class CollectionLauncher:
                 message=status.message,
             )
             module_records.append(module_record)
+            status_label = "OK" if status.healthy else "UNHEALTHY"
+            placeholder_suffix = " placeholder" if status.placeholder else ""
+            print(f"[{status_label}] {adapter.name}{placeholder_suffix}: {status.message or 'no status message'}")
             if not status.healthy and not self.config.behavior.allow_degraded_start:
                 raise RuntimeError(f"Module '{adapter.name}' failed initialization: {status.message}")
         self.run_metadata.set_modules(module_records)
