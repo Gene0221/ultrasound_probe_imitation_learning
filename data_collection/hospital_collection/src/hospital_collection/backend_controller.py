@@ -35,6 +35,9 @@ class BackendController(QObject):
         self._timer.setInterval(300)
         self._timer.timeout.connect(self._broadcast_status)
 
+        # Track last-seen messages per adapter so we only emit on change.
+        self._last_messages: dict[str, str | None] = {}
+
     # ── Lifecycle ──────────────────────────────────────────────────────
 
     def initialize(self) -> tuple[bool, str]:
@@ -77,5 +80,6 @@ class BackendController(QObject):
             for adapter in self._launcher.adapters:
                 adapter.health_check()
                 msg = adapter.status.message
-                if msg:
+                if msg and msg != self._last_messages.get(adapter.name):
+                    self._last_messages[adapter.name] = msg
                     self.log_message.emit(f"[{adapter.name}] {msg}")

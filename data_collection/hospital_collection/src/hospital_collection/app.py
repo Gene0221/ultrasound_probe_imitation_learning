@@ -35,6 +35,7 @@ class HospitalCollectionWindow(QMainWindow):
 
         self.latest_status: dict[str, Any] = {}
         self._backend_initialized = False
+        self._prev_state: str | None = None
 
         # UI state tracking
         self.module_widgets: dict[str, ModuleWidgets] = {}
@@ -55,9 +56,9 @@ class HospitalCollectionWindow(QMainWindow):
         self.stop_button = QPushButton("Quit System")
 
         self.launch_button.clicked.connect(self._launch_backend)
-        self.start_button.clicked.connect(self._controller.start_or_resume)
-        self.pause_button.clicked.connect(self._controller.pause)
-        self.resume_button.clicked.connect(self._controller.start_or_resume)
+        self.start_button.clicked.connect(self._on_start_session)
+        self.pause_button.clicked.connect(self._on_pause_session)
+        self.resume_button.clicked.connect(self._on_resume_session)
         self.stop_button.clicked.connect(self._shutdown_backend)
 
         for button in [
@@ -155,6 +156,18 @@ class HospitalCollectionWindow(QMainWindow):
         self.log_text.appendPlainText(cleaned)
         self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
+    def _on_start_session(self) -> None:
+        self._append_log("[APP] Sent command: start session")
+        self._controller.start_or_resume()
+
+    def _on_pause_session(self) -> None:
+        self._append_log("[APP] Sent command: pause session")
+        self._controller.pause()
+
+    def _on_resume_session(self) -> None:
+        self._append_log("[APP] Sent command: resume session")
+        self._controller.start_or_resume()
+
     def _launch_backend(self) -> None:
         if self._backend_initialized:
             return
@@ -177,6 +190,18 @@ class HospitalCollectionWindow(QMainWindow):
 
     def _on_status_updated(self, payload: dict[str, Any]) -> None:
         self.latest_status = payload
+
+        new_state = str(payload.get("state", "stopped"))
+        if new_state != self._prev_state:
+            self._prev_state = new_state
+            session_id = payload.get("active_session_id") or payload.get("last_session_id") or ""
+            if new_state == "recording":
+                self._append_log(f"[BACKEND] Recording {session_id}")
+            elif new_state == "paused":
+                self._append_log(f"[BACKEND] Paused {session_id}")
+            elif new_state == "stopped":
+                self._append_log("[BACKEND] Backend stopped.")
+
         self.state_label.setText(str(payload.get("state", "-")))
         self.active_session_label.setText(str(payload.get("active_session_id") or "-"))
         self.last_session_label.setText(str(payload.get("last_session_id") or "-"))
