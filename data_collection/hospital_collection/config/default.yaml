@@ -1,0 +1,69 @@
+output_root: output
+logging_root: logs
+
+behavior:
+  allow_degraded_start: true
+  start_pause_key: ENTER
+  quit_key: q
+
+modules:
+  visual_pose:
+    enabled: true
+    adapter: visual_pose
+    allow_placeholder: false
+    output_subdir: visual_pose
+    initialize_command: null
+    command:
+      - python
+      - scripts/track_apriltag_pose_deltas.py
+      - --config
+      - config/apriltag_tracking.yaml
+    workdir: ../visual_pose_tracking
+
+  paxini_force:
+    enabled: true
+    adapter: paxini_force
+    allow_placeholder: false
+    output_subdir: paxini_force
+    initialize_command:
+      - python
+      - scripts/calibrate_dp_s2015.py
+      - --config
+      - config/default.yaml
+    command:
+      - python
+      - scripts/log_paxini_force.py
+      - --config
+      - config/default.yaml
+    workdir: ../paxini_force_grasping
+    print_human_readable: false
+
+  imu:
+    enabled: true
+    adapter: imu
+    allow_placeholder: false
+    output_subdir: imu
+    initialize_command: null
+    command:
+      - python
+      - scripts/log_d435i_pitch_roll.py
+      - --config
+      - config/default.yaml
+    workdir: ../imu_pose_grasping
+    output:
+      print_stdout: false
+
+  ultrasound:
+    enabled: true
+    adapter: ultrasound
+    allow_placeholder: false
+    output_subdir: ultrasound
+    initialize_command: null
+    command:
+      - python
+      - scripts/capture_ultrasound_frames.py
+      - --config
+      - config/default.yaml
+    workdir: ../ultrasound_image_collection
+    output:
+      print_stdout: false
