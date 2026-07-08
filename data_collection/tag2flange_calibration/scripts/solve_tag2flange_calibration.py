@@ -22,6 +22,7 @@ TRANSFORM_KEY = "delta_transform_prev_to_curr"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Solve tag-to-flange hand-eye calibration from paired relative motions.")
+    parser.add_argument("--experiment-id", type=str, default="", help="User-provided experiment id for this run.")
     parser.add_argument("--visual-log", type=Path, default=DEFAULT_VISUAL_LOG, help="Path to the visual JSONL log.")
     parser.add_argument("--real-log", type=Path, default=DEFAULT_REAL_LOG, help="Path to the real JSONL log.")
     parser.add_argument("--output-json", type=Path, default=DEFAULT_OUTPUT_JSON, help="Path to the JSON report.")
@@ -32,6 +33,8 @@ def parse_args() -> argparse.Namespace:
         default=0.05,
         help="Maximum allowed nearest-neighbor timestamp gap.",
     )
+    parser.add_argument("--train-ratio", type=float, default=0.8, help="Train split ratio. Default is 0.8 for a 4:1 split.")
+    parser.add_argument("--split-seed", type=int, default=42, help="Random seed used for deterministic train/test splitting.")
     return parser.parse_args()
 
 
@@ -198,6 +201,91 @@ def transform_to_list(transform: np.ndarray) -> list[list[float]]:
     return [[float(value) for value in row] for row in transform.tolist()]
 
 
+def split_train_test_indices(sample_count: int, train_ratio: float, seed: int) -> tuple[np.ndarray, np.ndarray]:
+    if not 0.0 < train_ratio < 1.0:
+        raise ValueError("--train-ratio must be between 0 and 1.")
+    if sample_count < 5:
+        raise ValueError("At least 5 matched motion pairs are required for a 4:1 train/test split.")
+
+    indices = np.arange(sample_count, dtype=np.int64)
+    rng = np.random.default_rng(seed)
+    rng.shuffle(indices)
+    train_count = int(round(sample_count * train_ratio))
+    train_count = min(max(train_count, 3), sample_count - 1)
+    train_indices = np.sort(indices[:train_count])
+    test_indices = np.sort(indices[train_count:])
+    return train_indices, test_indices
+
+
+def compute_residual_summary(
+    transforms_a: np.ndarray,
+    transforms_b: np.ndarray,
+    tag_to_flange: np.ndarray,
+) -> dict[str, dict[str, float]]:
+    rotation_residuals_deg: list[float] = []
+    translation_residuals_m: list[float] = []
+    frobenius_residuals: list[float] = []
+    for transform_a, transform_b in zip(transforms_a, transforms_b):
+        lhs = transform_a @ tag_to_flange
+        rhs = tag_to_flange @ transform_b
+        delta = invert_transform(lhs) @ rhs
+        delta[:3, :3] = project_rotation_to_so3(delta[:3, :3])
+        rotation_residuals_deg.append(rotation_angle_deg(delta[:3, :3]))
+        translation_residuals_m.append(float(np.linalg.norm(delta[:3, 3])))
+        frobenius_residuals.append(float(np.linalg.norm(lhs - rhs, ord="fro")))
+
+    return {
+        "rotation_deg_stats": summarize_scalar(np.asarray(rotation_residuals_deg, dtype=np.float64)),
+        "translation_m_stats": summarize_scalar(np.asarray(translation_residuals_m, dtype=np.float64)),
+        "frobenius_stats": summarize_scalar(np.asarray(frobenius_residuals, dtype=np.float64)),
+    }
+
+
+def write_split_jsonl(
+    path: Path,
+    indices: np.ndarray,
+    transforms_a: np.ndarray,
+    transforms_b: np.ndarray,
+    visual_timestamps: np.ndarray,
+    real_timestamps: np.ndarray,
+    time_diffs_s: np.ndarray,
+) -> None:
+    ensure_parent(path)
+    with path.open("w", encoding="utf-8") as handle:
+        for split_index, sample_index in enumerate(indices.tolist()):
+            payload = {
+                "split_index": split_index,
+                "sample_index": int(sample_index),
+                "visual_timestamp_s": float(visual_timestamps[sample_index]),
+                "real_timestamp_s": float(real_timestamps[sample_index]),
+                "time_diff_s": float(time_diffs_s[sample_index]),
+                "visual_transform": transform_to_list(transforms_a[sample_index]),
+                "real_transform": transform_to_list(transforms_b[sample_index]),
+            }
+            handle.write(json.dumps(payload) + "\n")
+
+
+def build_train_test_evaluation(
+    train_residuals: dict[str, dict[str, float]],
+    test_residuals: dict[str, dict[str, float]],
+) -> dict[str, float]:
+    train_translation_mean_m = train_residuals["translation_m_stats"]["mean"]
+    test_translation_mean_m = test_residuals["translation_m_stats"]["mean"]
+    train_rotation_mean_deg = train_residuals["rotation_deg_stats"]["mean"]
+    test_rotation_mean_deg = test_residuals["rotation_deg_stats"]["mean"]
+    return {
+        "train_translation_mean_m": float(train_translation_mean_m),
+        "test_translation_mean_m": float(test_translation_mean_m),
+        "translation_mean_gap_m": float(test_translation_mean_m - train_translation_mean_m),
+        "train_translation_mean_mm": float(train_translation_mean_m * 1000.0),
+        "test_translation_mean_mm": float(test_translation_mean_m * 1000.0),
+        "translation_mean_gap_mm": float((test_translation_mean_m - train_translation_mean_m) * 1000.0),
+        "train_rotation_mean_deg": float(train_rotation_mean_deg),
+        "test_rotation_mean_deg": float(test_rotation_mean_deg),
+        "rotation_mean_gap_deg": float(test_rotation_mean_deg - train_rotation_mean_deg),
+    }
+
+
 def main() -> None:
     args = parse_args()
     visual_records = extract_records(args.visual_log)
@@ -236,27 +324,36 @@ def main() -> None:
 
     transforms_a = np.stack(transform_pairs_a)
     transforms_b = np.stack(transform_pairs_b)
-    tag_to_flange = solve_hand_eye(transforms_a, transforms_b)
+    visual_timestamps_array = np.asarray(visual_timestamps, dtype=np.float64)
+    real_timestamps_matched_array = np.asarray(real_timestamps_matched, dtype=np.float64)
+    time_diffs_array = np.asarray(time_diffs_s, dtype=np.float64)
+    train_indices, test_indices = split_train_test_indices(
+        sample_count=len(transform_pairs_a),
+        train_ratio=args.train_ratio,
+        seed=args.split_seed,
+    )
+    train_transforms_a = transforms_a[train_indices]
+    train_transforms_b = transforms_b[train_indices]
+    test_transforms_a = transforms_a[test_indices]
+    test_transforms_b = transforms_b[test_indices]
+
+    tag_to_flange = solve_hand_eye(train_transforms_a, train_transforms_b)
     flange_to_tag = invert_transform(tag_to_flange)
 
-    rotation_residuals_deg: list[float] = []
-    translation_residuals_m: list[float] = []
-    frobenius_residuals: list[float] = []
-    for transform_a, transform_b in zip(transforms_a, transforms_b):
-        lhs = transform_a @ tag_to_flange
-        rhs = tag_to_flange @ transform_b
-        delta = invert_transform(lhs) @ rhs
-        delta[:3, :3] = project_rotation_to_so3(delta[:3, :3])
-        rotation_residuals_deg.append(rotation_angle_deg(delta[:3, :3]))
-        translation_residuals_m.append(float(np.linalg.norm(delta[:3, 3])))
-        frobenius_residuals.append(float(np.linalg.norm(lhs - rhs, ord="fro")))
+    all_residuals = compute_residual_summary(transforms_a, transforms_b, tag_to_flange)
+    train_residuals = compute_residual_summary(train_transforms_a, train_transforms_b, tag_to_flange)
+    test_residuals = compute_residual_summary(test_transforms_a, test_transforms_b, tag_to_flange)
+    evaluation = build_train_test_evaluation(train_residuals, test_residuals)
 
-    time_diffs_array = np.asarray(time_diffs_s, dtype=np.float64)
-    rotation_residuals_array = np.asarray(rotation_residuals_deg, dtype=np.float64)
-    translation_residuals_array = np.asarray(translation_residuals_m, dtype=np.float64)
-    frobenius_residuals_array = np.asarray(frobenius_residuals, dtype=np.float64)
+    split_root = args.output_npz.parent / "dataset_split"
+    train_npz = split_root / "train_pairs.npz"
+    test_npz = split_root / "test_pairs.npz"
+    train_jsonl = split_root / "train_pairs.jsonl"
+    test_jsonl = split_root / "test_pairs.jsonl"
+    split_manifest = split_root / "split_manifest.json"
 
     report = {
+        "experiment_id": args.experiment_id,
         "visual_log": str(args.visual_log),
         "real_log": str(args.real_log),
         "timestamp_key": TIMESTAMP_KEY,
@@ -266,41 +363,84 @@ def main() -> None:
         "matched_samples": len(transform_pairs_a),
         "skipped_samples_due_to_time_diff": skipped_count,
         "max_time_diff_s": float(args.max_time_diff_s),
-        "time_diff_s_stats": summarize_scalar(time_diffs_array),
+        "split": {
+            "train_ratio": float(args.train_ratio),
+            "split_seed": int(args.split_seed),
+            "train_samples": int(train_indices.size),
+            "test_samples": int(test_indices.size),
+            "train_indices": [int(index) for index in train_indices.tolist()],
+            "test_indices": [int(index) for index in test_indices.tolist()],
+            "train_npz": str(train_npz),
+            "test_npz": str(test_npz),
+            "train_jsonl": str(train_jsonl),
+            "test_jsonl": str(test_jsonl),
+        },
         "estimated_transforms": {
             "T_tag_to_flange": transform_to_list(tag_to_flange),
             "T_flange_to_tag": transform_to_list(flange_to_tag),
         },
-        "residuals": {
-            "rotation_deg_stats": summarize_scalar(rotation_residuals_array),
-            "translation_m_stats": summarize_scalar(translation_residuals_array),
-            "frobenius_stats": summarize_scalar(frobenius_residuals_array),
-        },
+        "residuals": all_residuals,
+        "train_residuals": train_residuals,
+        "test_residuals": test_residuals,
+        "evaluation": evaluation,
     }
 
     ensure_parent(args.output_json)
     ensure_parent(args.output_npz)
+    ensure_parent(train_npz)
     args.output_json.write_text(json.dumps(report, indent=2), encoding="utf-8")
     np.savez(
         args.output_npz,
         visual_transforms=transforms_a,
         real_transforms=transforms_b,
-        visual_timestamps=np.asarray(visual_timestamps, dtype=np.float64),
-        real_timestamps=np.asarray(real_timestamps_matched, dtype=np.float64),
+        visual_timestamps=visual_timestamps_array,
+        real_timestamps=real_timestamps_matched_array,
         time_diff_s=time_diffs_array,
+        train_indices=train_indices,
+        test_indices=test_indices,
         T_tag_to_flange=tag_to_flange,
         T_flange_to_tag=flange_to_tag,
     )
+    np.savez(
+        train_npz,
+        visual_transforms=train_transforms_a,
+        real_transforms=train_transforms_b,
+        visual_timestamps=visual_timestamps_array[train_indices],
+        real_timestamps=real_timestamps_matched_array[train_indices],
+        time_diff_s=time_diffs_array[train_indices],
+        sample_indices=train_indices,
+    )
+    np.savez(
+        test_npz,
+        visual_transforms=test_transforms_a,
+        real_transforms=test_transforms_b,
+        visual_timestamps=visual_timestamps_array[test_indices],
+        real_timestamps=real_timestamps_matched_array[test_indices],
+        time_diff_s=time_diffs_array[test_indices],
+        sample_indices=test_indices,
+    )
+    write_split_jsonl(train_jsonl, train_indices, transforms_a, transforms_b, visual_timestamps_array, real_timestamps_matched_array, time_diffs_array)
+    write_split_jsonl(test_jsonl, test_indices, transforms_a, transforms_b, visual_timestamps_array, real_timestamps_matched_array, time_diffs_array)
+    split_manifest.write_text(json.dumps(report["split"], indent=2), encoding="utf-8")
 
     print(f"[DONE] Saved calibration report to: {args.output_json}")
     print(f"[DONE] Saved calibration bundle to: {args.output_npz}")
+    print(f"[DONE] Saved train split to: {train_npz}")
+    print(f"[DONE] Saved test split to: {test_npz}")
     print("[INFO] Residual summary")
     print(
         "       "
-        f"rotation_mean_deg={report['residuals']['rotation_deg_stats']['mean']:.6f}, "
-        f"translation_mean_m={report['residuals']['translation_m_stats']['mean']:.6f}, "
-        f"rotation_p95_deg={report['residuals']['rotation_deg_stats']['p95']:.6f}, "
-        f"translation_p95_m={report['residuals']['translation_m_stats']['p95']:.6f}"
+        f"train_translation_mean_mm={evaluation['train_translation_mean_mm']:.6f}, "
+        f"test_translation_mean_mm={evaluation['test_translation_mean_mm']:.6f}, "
+        f"translation_mean_gap_mm={evaluation['translation_mean_gap_mm']:.6f}"
+    )
+    print(
+        "       "
+        f"train_samples={train_indices.size}, "
+        f"test_samples={test_indices.size}, "
+        f"train_rotation_mean_deg={evaluation['train_rotation_mean_deg']:.6f}, "
+        f"test_rotation_mean_deg={evaluation['test_rotation_mean_deg']:.6f}, "
+        f"rotation_mean_gap_deg={evaluation['rotation_mean_gap_deg']:.6f}"
     )
 
 

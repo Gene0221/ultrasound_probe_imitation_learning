@@ -92,12 +92,25 @@ def wait_for_quit() -> None:
             return
 
 
-def solve_calibration(output_root: Path, visual_output: Path, real_output: Path) -> None:
+def prompt_experiment_id() -> str:
+    while True:
+        experiment_id = input("Enter experiment id: ").strip()
+        if experiment_id:
+            safe_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in experiment_id)
+            if safe_id != experiment_id:
+                print(f"[INFO] Using sanitized experiment id: {safe_id}")
+            return safe_id
+        print("[WARN] Experiment id cannot be empty.")
+
+
+def solve_calibration(output_root: Path, visual_output: Path, real_output: Path, experiment_id: str) -> None:
     report_path = output_root / "tag2flange_calibration_report.json"
     bundle_path = output_root / "tag2flange_calibration_data.npz"
     command = [
         sys.executable,
         str(SOLVER_SCRIPT),
+        "--experiment-id",
+        experiment_id,
         "--visual-log",
         str(visual_output / "tag_pose_deltas.jsonl"),
         "--real-log",
@@ -116,7 +129,8 @@ def solve_calibration(output_root: Path, visual_output: Path, real_output: Path)
 
 
 def main() -> None:
-    output_root = WORKSPACE_ROOT / "output" / time.strftime("collection_%Y%m%d_%H%M%S")
+    experiment_id = prompt_experiment_id()
+    output_root = WORKSPACE_ROOT / "output" / f"experiment_{experiment_id}_{time.strftime('%Y%m%d_%H%M%S')}"
     visual_output = output_root / "visual_pose"
     real_output = output_root / "real_pose"
     control_root = output_root / "controls"
@@ -161,7 +175,7 @@ def main() -> None:
         terminate_process(visual_process)
         terminate_process(real_process)
 
-    solve_calibration(output_root, visual_output, real_output)
+    solve_calibration(output_root, visual_output, real_output, experiment_id)
 
 
 if __name__ == "__main__":
