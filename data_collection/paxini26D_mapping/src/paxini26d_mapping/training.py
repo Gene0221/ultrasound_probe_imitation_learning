@@ -76,10 +76,25 @@ def evaluate(model: nn.Module, split: SplitData, device: torch.device) -> dict[s
     with torch.no_grad():
         predictions = model(split.features.to(device)).cpu()
         targets = split.targets.cpu()
-        mse = torch.mean((predictions - targets) ** 2).item()
-        mae = torch.mean(torch.abs(predictions - targets)).item()
+        errors = predictions - targets
+        mse = torch.mean(errors ** 2).item()
+        mae = torch.mean(torch.abs(errors)).item()
         rmse = math.sqrt(mse)
-    return {"mse": mse, "mae": mae, "rmse": rmse}
+
+        target_mean = torch.mean(targets)
+        ss_res = torch.sum((targets - predictions) ** 2)
+        ss_tot = torch.sum((targets - target_mean) ** 2)
+        r2 = 1.0 - (ss_res / ss_tot).item() if ss_tot.item() > 1e-12 else 0.0
+
+        prediction_centered = predictions - torch.mean(predictions)
+        target_centered = targets - torch.mean(targets)
+        pearson_denominator = torch.sqrt(torch.sum(prediction_centered ** 2) * torch.sum(target_centered ** 2))
+        pearson = (
+            (torch.sum(prediction_centered * target_centered) / pearson_denominator).item()
+            if pearson_denominator.item() > 1e-12
+            else 0.0
+        )
+    return {"mse": mse, "mae": mae, "rmse": rmse, "r2": float(r2), "pearson": float(pearson)}
 
 
 def metric_gaps(reference: dict[str, float], compared: dict[str, float]) -> dict[str, float]:
@@ -87,6 +102,8 @@ def metric_gaps(reference: dict[str, float], compared: dict[str, float]) -> dict
         "mse_gap": float(compared["mse"] - reference["mse"]),
         "mae_gap": float(compared["mae"] - reference["mae"]),
         "rmse_gap": float(compared["rmse"] - reference["rmse"]),
+        "r2_gap": float(compared["r2"] - reference["r2"]),
+        "pearson_gap": float(compared["pearson"] - reference["pearson"]),
     }
 
 

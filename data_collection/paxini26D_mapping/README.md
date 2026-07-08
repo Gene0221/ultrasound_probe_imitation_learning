@@ -71,22 +71,30 @@ validation/test gaps relative to the training set:
 ```json
 {
   "evaluation": {
-    "train": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
-    "validation": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
-    "test": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
+    "train": {"mse": 0.0, "mae": 0.0, "rmse": 0.0, "r2": 0.0, "pearson": 0.0},
+    "validation": {"mse": 0.0, "mae": 0.0, "rmse": 0.0, "r2": 0.0, "pearson": 0.0},
+    "test": {"mse": 0.0, "mae": 0.0, "rmse": 0.0, "r2": 0.0, "pearson": 0.0},
     "validation_gap_from_train": {
       "mse_gap": 0.0,
       "mae_gap": 0.0,
-      "rmse_gap": 0.0
+      "rmse_gap": 0.0,
+      "r2_gap": 0.0,
+      "pearson_gap": 0.0
     },
     "test_gap_from_train": {
       "mse_gap": 0.0,
       "mae_gap": 0.0,
-      "rmse_gap": 0.0
+      "rmse_gap": 0.0,
+      "r2_gap": 0.0,
+      "pearson_gap": 0.0
     }
   }
 }
 ```
+
+`r2` measures how much variance of the KWR75B reference `Fz` is explained by
+the model, while `pearson` measures the linear correlation between predicted and
+reference force.
 
 The JSON report does not print split indices. The saved `.pt` split files are
 used for downstream inspection or reproduction.

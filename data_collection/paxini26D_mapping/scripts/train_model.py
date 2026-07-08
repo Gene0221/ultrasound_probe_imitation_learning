@@ -47,15 +47,23 @@ def main() -> None:
         "[INFO] Validation metrics: "
         f"MAE={evaluation['validation']['mae']:.6f}, "
         f"RMSE={evaluation['validation']['rmse']:.6f}, "
+        f"R2={evaluation['validation']['r2']:.6f}, "
+        f"Pearson={evaluation['validation']['pearson']:.6f}, "
         f"MAE_gap={evaluation['validation_gap_from_train']['mae_gap']:.6f}, "
-        f"RMSE_gap={evaluation['validation_gap_from_train']['rmse_gap']:.6f}"
+        f"RMSE_gap={evaluation['validation_gap_from_train']['rmse_gap']:.6f}, "
+        f"R2_gap={evaluation['validation_gap_from_train']['r2_gap']:.6f}, "
+        f"Pearson_gap={evaluation['validation_gap_from_train']['pearson_gap']:.6f}"
     )
     print(
         "[INFO] Test metrics: "
         f"MAE={evaluation['test']['mae']:.6f}, "
         f"RMSE={evaluation['test']['rmse']:.6f}, "
+        f"R2={evaluation['test']['r2']:.6f}, "
+        f"Pearson={evaluation['test']['pearson']:.6f}, "
         f"MAE_gap={evaluation['test_gap_from_train']['mae_gap']:.6f}, "
-        f"RMSE_gap={evaluation['test_gap_from_train']['rmse_gap']:.6f}"
+        f"RMSE_gap={evaluation['test_gap_from_train']['rmse_gap']:.6f}, "
+        f"R2_gap={evaluation['test_gap_from_train']['r2_gap']:.6f}, "
+        f"Pearson_gap={evaluation['test_gap_from_train']['pearson_gap']:.6f}"
     )
 
 
