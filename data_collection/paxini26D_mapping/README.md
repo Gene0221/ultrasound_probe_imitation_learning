@@ -14,10 +14,11 @@ python main.py
 
 `main.py` runs:
 
-1. unified collection for `imu`, `paxini`, and `force6d`
-2. session recording until you press `q`
-3. dataset preparation
-4. model training
+1. asks for an experiment name
+2. unified collection for `imu`, `paxini`, and `force6d`
+3. session recording until you press `q`
+4. dataset preparation
+5. model training
 
 The collection stage uses the same session controls as the hospital workspace:
 
@@ -38,10 +39,22 @@ current 26D config disables human-readable terminal streaming for Paxini and
 - aligned dataset: `dataset/`
 - trained models: `model/`
 
-Each training run writes a model directory under `model/run_*/`:
+When an experiment name is entered, the aligned dataset is saved as:
 
 ```text
-model/run_*/
+dataset/EXPERIMENT_NAME.pt
+```
+
+and the model run directory is saved as:
+
+```text
+model/EXPERIMENT_NAME_YYYY-MM-DDTHH-MM-SSZ/
+```
+
+Each training run writes a model directory under `model/`:
+
+```text
+model/<run_name>/
   model.pt
   summary.json
   dataset_split/

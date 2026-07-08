@@ -17,6 +17,7 @@ from paxini26d_mapping.dataset import build_dataset, load_mapping_config  # noqa
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Align all sessions and export a training dataset.")
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "default.yaml"))
+    parser.add_argument("--experiment-name", default=None, help="Optional experiment name used in the dataset file name.")
     return parser.parse_args()
 
 
@@ -25,7 +26,12 @@ def main() -> None:
     config_path = resolve_from(PROJECT_ROOT, args.config)
     config = load_mapping_config(config_path)
     dataset_root = ensure_dir(resolve_from(PROJECT_ROOT, config["paths"]["dataset_root"]))
-    output_path = dataset_root / config["dataset"]["output_file_name"]
+    output_name = (
+        f"{args.experiment_name}.pt"
+        if args.experiment_name
+        else config["dataset"]["output_file_name"]
+    )
+    output_path = dataset_root / output_name
     summary = build_dataset(config=config, project_root=PROJECT_ROOT, output_path=output_path)
     print(f"[INFO] Saved dataset to {output_path}")
     print(f"[INFO] Samples: {summary['num_samples']}, feature_dim: {summary['feature_dim']}")

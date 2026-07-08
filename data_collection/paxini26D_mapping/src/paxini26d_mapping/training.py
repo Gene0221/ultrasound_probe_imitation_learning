@@ -117,6 +117,7 @@ def train_model(
     dataset_payload: dict[str, Any],
     config: dict[str, Any],
     output_root: Path,
+    experiment_name: str | None = None,
 ) -> dict[str, Any]:
     train_cfg = config["training"]
     set_seed(int(train_cfg["seed"]))
@@ -205,7 +206,8 @@ def train_model(
         "test_gap_from_train": metric_gaps(final_train_metrics, final_test_metrics),
     }
 
-    run_dir = ensure_dir(output_root / f"run_{utc_now_iso().replace(':', '-').replace('+00:00', 'Z')}")
+    run_prefix = f"{experiment_name}_" if experiment_name else "run_"
+    run_dir = ensure_dir(output_root / f"{run_prefix}{utc_now_iso().replace(':', '-').replace('+00:00', 'Z')}")
     split_dir = ensure_dir(run_dir / "dataset_split")
     train_split_path = split_dir / "train.pt"
     val_split_path = split_dir / "val.pt"
@@ -233,6 +235,7 @@ def train_model(
     )
 
     summary = {
+        "experiment_name": experiment_name,
         "run_dir": str(run_dir),
         "checkpoint_path": str(checkpoint_path),
         "num_samples": int(features.shape[0]),
