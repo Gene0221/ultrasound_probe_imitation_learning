@@ -38,8 +38,23 @@ def main() -> None:
     payload = torch.load(dataset_path, map_location="cpu")
     model_root = ensure_dir(resolve_from(PROJECT_ROOT, config["paths"]["model_root"]))
     summary = train_model(dataset_payload=payload, config=config, output_root=model_root)
+    evaluation = summary["evaluation"]
     print(f"[INFO] Saved model to {summary['checkpoint_path']}")
-    print(f"[INFO] Test RMSE: {summary['test_metrics']['rmse']:.6f}")
+    print(f"[INFO] Saved dataset splits to {summary['split_paths']}")
+    print(
+        "[INFO] Validation metrics: "
+        f"MAE={evaluation['validation']['mae']:.6f}, "
+        f"RMSE={evaluation['validation']['rmse']:.6f}, "
+        f"MAE_gap={evaluation['validation_gap_from_train']['mae_gap']:.6f}, "
+        f"RMSE_gap={evaluation['validation_gap_from_train']['rmse_gap']:.6f}"
+    )
+    print(
+        "[INFO] Test metrics: "
+        f"MAE={evaluation['test']['mae']:.6f}, "
+        f"RMSE={evaluation['test']['rmse']:.6f}, "
+        f"MAE_gap={evaluation['test_gap_from_train']['mae_gap']:.6f}, "
+        f"RMSE_gap={evaluation['test_gap_from_train']['rmse_gap']:.6f}"
+    )
 
 
 if __name__ == "__main__":

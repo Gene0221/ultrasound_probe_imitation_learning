@@ -82,6 +82,37 @@ def evaluate(model: nn.Module, split: SplitData, device: torch.device) -> dict[s
     return {"mse": mse, "mae": mae, "rmse": rmse}
 
 
+def metric_gaps(reference: dict[str, float], compared: dict[str, float]) -> dict[str, float]:
+    return {
+        "mse_gap": float(compared["mse"] - reference["mse"]),
+        "mae_gap": float(compared["mae"] - reference["mae"]),
+        "rmse_gap": float(compared["rmse"] - reference["rmse"]),
+    }
+
+
+def save_split_dataset(
+    path: Path,
+    features: torch.Tensor,
+    targets: torch.Tensor,
+    indices: list[int],
+    dataset_payload: dict[str, Any],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, Any] = {
+        "features": index_tensor(features, indices),
+        "targets": index_tensor(targets, indices),
+        "feature_names": dataset_payload["feature_names"],
+        "target_names": dataset_payload["target_names"],
+    }
+    if "session_ids" in dataset_payload:
+        payload["session_ids"] = [dataset_payload["session_ids"][index] for index in indices]
+    if "anchor_timestamps_s" in dataset_payload:
+        payload["anchor_timestamps_s"] = [dataset_payload["anchor_timestamps_s"][index] for index in indices]
+    if "match_deltas_s" in dataset_payload:
+        payload["match_deltas_s"] = [dataset_payload["match_deltas_s"][index] for index in indices]
+    torch.save(payload, path)
+
+
 def train_model(
     dataset_payload: dict[str, Any],
     config: dict[str, Any],
@@ -166,8 +197,23 @@ def train_model(
     final_train_metrics = evaluate(model, train_split, device)
     final_val_metrics = evaluate(model, val_split, device)
     final_test_metrics = evaluate(model, test_split, device)
+    evaluation = {
+        "train": final_train_metrics,
+        "validation": final_val_metrics,
+        "test": final_test_metrics,
+        "validation_gap_from_train": metric_gaps(final_train_metrics, final_val_metrics),
+        "test_gap_from_train": metric_gaps(final_train_metrics, final_test_metrics),
+    }
 
     run_dir = ensure_dir(output_root / f"run_{utc_now_iso().replace(':', '-').replace('+00:00', 'Z')}")
+    split_dir = ensure_dir(run_dir / "dataset_split")
+    train_split_path = split_dir / "train.pt"
+    val_split_path = split_dir / "val.pt"
+    test_split_path = split_dir / "test.pt"
+    save_split_dataset(train_split_path, features, targets, train_indices, dataset_payload)
+    save_split_dataset(val_split_path, features, targets, val_indices, dataset_payload)
+    save_split_dataset(test_split_path, features, targets, test_indices, dataset_payload)
+
     checkpoint_path = run_dir / "model.pt"
     torch.save(
         {
@@ -176,6 +222,11 @@ def train_model(
             "feature_std": feature_std,
             "feature_names": dataset_payload["feature_names"],
             "target_names": dataset_payload["target_names"],
+            "split_paths": {
+                "train": str(train_split_path),
+                "validation": str(val_split_path),
+                "test": str(test_split_path),
+            },
             "config": config,
         },
         checkpoint_path,
@@ -189,9 +240,15 @@ def train_model(
         "num_val": len(val_indices),
         "num_test": len(test_indices),
         "device": str(device),
+        "split_paths": {
+            "train": str(train_split_path),
+            "validation": str(val_split_path),
+            "test": str(test_split_path),
+        },
         "train_metrics": final_train_metrics,
         "val_metrics": final_val_metrics,
         "test_metrics": final_test_metrics,
+        "evaluation": evaluation,
         "history_tail": history[-10:],
     }
     save_json(run_dir / "summary.json", summary)

@@ -15,6 +15,14 @@ REAL_WORKSPACE_ROOT = DATA_COLLECTION_ROOT / "real_pose_tracking"
 VISUAL_SCRIPT = VISUAL_WORKSPACE_ROOT / "scripts" / "track_apriltag_pose_deltas.py"
 REAL_SCRIPT = REAL_WORKSPACE_ROOT / "scripts" / "controlled_real_pose_logger.py"
 SOLVER_SCRIPT = WORKSPACE_ROOT / "scripts" / "solve_tag2flange_calibration.py"
+REAL_BINARY_CANDIDATES = [
+    REAL_WORKSPACE_ROOT / "build" / "read_franka_ee_pose",
+    REAL_WORKSPACE_ROOT / "build" / "read_franka_ee_pose.exe",
+    REAL_WORKSPACE_ROOT / "build" / "Release" / "read_franka_ee_pose",
+    REAL_WORKSPACE_ROOT / "build" / "Release" / "read_franka_ee_pose.exe",
+    REAL_WORKSPACE_ROOT / "src" / "read_franka_ee_pose",
+    REAL_WORKSPACE_ROOT / "src" / "read_franka_ee_pose.exe",
+]
 
 
 def read_single_key() -> str:
@@ -64,6 +72,26 @@ def write_control(path: Path, recording: bool, output_dir: Path | None, shutdown
         "shutdown": shutdown,
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def validate_runtime_dependencies() -> None:
+    missing_scripts = [
+        path
+        for path in [VISUAL_SCRIPT, REAL_SCRIPT, SOLVER_SCRIPT]
+        if not path.is_file()
+    ]
+    if missing_scripts:
+        missing_text = "\n".join(f"  - {path}" for path in missing_scripts)
+        raise FileNotFoundError(f"Required script(s) not found:\n{missing_text}")
+
+    if not any(path.is_file() for path in REAL_BINARY_CANDIDATES):
+        candidates_text = "\n".join(f"  - {path}" for path in REAL_BINARY_CANDIDATES)
+        raise FileNotFoundError(
+            "Cannot start real pose tracking because read_franka_ee_pose is not built.\n"
+            "Build real_pose_tracking first, then rerun tag2flange_calibration/main.py.\n"
+            "Checked paths:\n"
+            f"{candidates_text}"
+        )
 
 
 def terminate_process(process: subprocess.Popen[str] | None, timeout_s: float = 5.0) -> None:
@@ -129,6 +157,7 @@ def solve_calibration(output_root: Path, visual_output: Path, real_output: Path,
 
 
 def main() -> None:
+    validate_runtime_dependencies()
     experiment_id = prompt_experiment_id()
     output_root = WORKSPACE_ROOT / "output" / f"experiment_{experiment_id}_{time.strftime('%Y%m%d_%H%M%S')}"
     visual_output = output_root / "visual_pose"

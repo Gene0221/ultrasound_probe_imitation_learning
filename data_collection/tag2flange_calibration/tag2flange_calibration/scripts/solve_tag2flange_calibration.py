@@ -368,8 +368,6 @@ def main() -> None:
             "split_seed": int(args.split_seed),
             "train_samples": int(train_indices.size),
             "test_samples": int(test_indices.size),
-            "train_indices": [int(index) for index in train_indices.tolist()],
-            "test_indices": [int(index) for index in test_indices.tolist()],
             "train_npz": str(train_npz),
             "test_npz": str(test_npz),
             "train_jsonl": str(train_jsonl),

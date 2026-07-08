@@ -38,6 +38,46 @@ current 26D config disables human-readable terminal streaming for Paxini and
 - aligned dataset: `dataset/`
 - trained models: `model/`
 
+Each training run writes a model directory under `model/run_*/`:
+
+```text
+model/run_*/
+  model.pt
+  summary.json
+  dataset_split/
+    train.pt
+    val.pt
+    test.pt
+```
+
+The split ratios are kept as `train/val/test = 0.7/0.15/0.15` according to
+`config/default.yaml`. The validation and test sets are held out from training.
+`summary.json` reports training, validation, and test metrics, plus the
+validation/test gaps relative to the training set:
+
+```json
+{
+  "evaluation": {
+    "train": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
+    "validation": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
+    "test": {"mse": 0.0, "mae": 0.0, "rmse": 0.0},
+    "validation_gap_from_train": {
+      "mse_gap": 0.0,
+      "mae_gap": 0.0,
+      "rmse_gap": 0.0
+    },
+    "test_gap_from_train": {
+      "mse_gap": 0.0,
+      "mae_gap": 0.0,
+      "rmse_gap": 0.0
+    }
+  }
+}
+```
+
+The JSON report does not print split indices. The saved `.pt` split files are
+used for downstream inspection or reproduction.
+
 ## Inference Role
 
 This workspace no longer owns hospital-side inference-input collection.
