@@ -10,6 +10,12 @@ from typing import Any
 
 import yaml
 
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - convenience fallback for minimal environments
+    def tqdm(iterable, **_: Any):
+        return iterable
+
 
 def load_config(path: str | Path) -> dict[str, Any]:
     config_path = Path(path).resolve()
@@ -207,8 +213,8 @@ def build_session_samples(session_dir: Path, config: dict[str, Any], *, include_
     return samples, stats
 
 
-def copy_sample_images(samples: list[dict[str, Any]], image_root: Path) -> None:
-    for sample in samples:
+def copy_sample_images(samples: list[dict[str, Any]], image_root: Path, *, desc: str) -> None:
+    for sample in tqdm(samples, desc=desc, unit="img", leave=False):
         session_id = str(sample["source_session"])
         target_dir = image_root / session_id
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -242,19 +248,19 @@ def build_dataset(config_path: str | Path) -> dict[str, Any]:
         "versions": {},
     }
 
-    for version in versions:
+    for version in tqdm(versions, desc="dataset versions", unit="version"):
         include_force = version == "with_force"
         version_root = dataset_root / version
         if version_root.exists() and overwrite:
             shutil.rmtree(version_root)
         version_summary = {"include_force": include_force, "splits": {}}
-        for split_name, split_sessions_list in split_map.items():
+        for split_name, split_sessions_list in tqdm(split_map.items(), desc=f"{version} splits", unit="split", leave=False):
             split_root = version_root / split_name
             all_samples: list[dict[str, Any]] = []
             split_summary = {"sessions": [], "num_samples": 0}
-            for session_dir in split_sessions_list:
+            for session_dir in tqdm(split_sessions_list, desc=f"{version}/{split_name} sessions", unit="session", leave=False):
                 samples, stats = build_session_samples(session_dir, config, include_force=include_force)
-                copy_sample_images(samples, split_root / "images")
+                copy_sample_images(samples, split_root / "images", desc=f"copy {version}/{split_name}/{session_dir.name}")
                 all_samples.extend(samples)
                 split_summary["sessions"].append({"session_id": session_dir.name, **stats})
                 split_summary["num_samples"] += len(samples)
