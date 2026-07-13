@@ -8,6 +8,12 @@ import torch
 from torch.utils.data import DataLoader
 import yaml
 
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover - convenience fallback for minimal environments
+    def tqdm(iterable, **_):
+        return iterable
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -37,11 +43,12 @@ def build_transform(image_size: int):
     )
 
 
-def run_epoch(model, loader, criterion, optimizer, device, include_force: bool) -> float:
+def run_epoch(model, loader, criterion, optimizer, device, include_force: bool, *, epoch: int, mode: str) -> float:
     model.train(optimizer is not None)
     total_loss = 0.0
     total_count = 0
-    for batch in loader:
+    progress = tqdm(loader, desc=f"{mode} epoch {epoch}", unit="batch", leave=False)
+    for batch in progress:
         image = batch["image"].to(device)
         action = batch["action"].to(device)
         force = batch.get("force")
@@ -56,6 +63,9 @@ def run_epoch(model, loader, criterion, optimizer, device, include_force: bool) 
                 optimizer.step()
         total_loss += float(loss.item()) * image.shape[0]
         total_count += image.shape[0]
+        avg_loss = total_loss / max(total_count, 1)
+        if hasattr(progress, "set_postfix"):
+            progress.set_postfix(loss=f"{float(loss.item()):.6f}", avg=f"{avg_loss:.6f}")
     return total_loss / max(total_count, 1)
 
 
@@ -91,8 +101,8 @@ def main() -> None:
     best_val = float("inf")
     history = []
     for epoch in range(1, int(config["training"]["epochs"]) + 1):
-        train_loss = run_epoch(model, train_loader, criterion, optimizer, device, include_force)
-        val_loss = run_epoch(model, val_loader, criterion, None, device, include_force)
+        train_loss = run_epoch(model, train_loader, criterion, optimizer, device, include_force, epoch=epoch, mode="train")
+        val_loss = run_epoch(model, val_loader, criterion, None, device, include_force, epoch=epoch, mode="val")
         history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
         print(f"epoch={epoch} train_loss={train_loss:.6f} val_loss={val_loss:.6f}")
         if val_loss < best_val:
