@@ -1,0 +1,29 @@
+dataset:
+  dataset_root: E:/research_data/training_datasets/diffusion_pose_h20
+  version: without_force
+  action_horizon: 20
+  image_size: 224
+
+model:
+  pretrained_resnet18: true
+  freeze_encoder: false
+  condition_dim: 512
+  hidden_dim: 1024
+  time_embed_dim: 128
+  action_dim: 7
+  force_dim: 1
+
+diffusion:
+  num_steps: 100
+  beta_start: 0.0001
+  beta_end: 0.02
+
+training:
+  output_dir: runs/diffusion_pose_h20
+  batch_size: 64
+  epochs: 100
+  learning_rate: 0.0001
+  weight_decay: 0.00001
+  num_workers: 0
+  seed: 42
+
