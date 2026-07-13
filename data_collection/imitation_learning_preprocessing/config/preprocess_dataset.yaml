@@ -1,4 +1,13 @@
-session_root: ../hospital_data_collection/output
+paths:
+  # Set this to the hospital_collection output directory on your mobile drive.
+  # Absolute Windows paths are supported, for example:
+  # session_root: E:/hospital_collection/output
+  session_root: E:\research_data\rotate\output
+  session_prefix: session_
+
+  # These can also point to files/directories on the same mobile drive if needed.
+  calibration_root: ../tag2flange_calibration/output
+  model_root: ../paxini26D_mapping/model
 
 session_layout:
   imu_subdir: imu
@@ -9,11 +18,30 @@ session_layout:
   visual_subdir: visual_pose
   visual_file: tag_pose_deltas.jsonl
 
+calibration:
+  # Optional explicit file. Supports .npz or .json.
+  path:
+  dir_prefixes:
+    - experiment_
+    - collection_
+  npz_file: tag2flange_calibration_data.npz
+  json_file: tag2flange_calibration_report.json
+
+model:
+  # Optional explicit checkpoint file.
+  checkpoint:
+  checkpoint_patterns:
+    - "model.pt"
+    - "*/model.pt"
+    - "run_*/model.pt"
+
 force_mapping:
   output_subdir: predicted_force
   output_file: predicted_force.jsonl
+  summary_file: predicted_force.summary.json
   max_time_delta_s: 0.05
 
 pose_transform:
   output_subdir: transformed_pose
   output_file: flange_pose_deltas.jsonl
+  summary_file: flange_pose_deltas.summary.json

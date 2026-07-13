@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import yaml
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,20 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 DATA_COLLECTION_ROOT = PROJECT_ROOT.parent
 TAG2FLANGE_ROOT = DATA_COLLECTION_ROOT / "tag2flange_calibration"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from module.common import (  # noqa: E402
+    DEFAULT_CONFIG_PATH,
+    config_get,
+    latest_child_dir,
+    load_config,
+    output_path_for_session,
+    resolve_path,
+    resolve_session_dirs,
+    write_json,
+    write_jsonl,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -82,20 +96,26 @@ def sanitize_transform(matrix: np.ndarray) -> np.ndarray:
 # Calibration loading
 # ---------------------------------------------------------------------------
 
-def latest_calibration_dir(root: Path) -> Path:
-    candidates = sorted(
-        [d for d in root.iterdir() if d.is_dir() and d.name.startswith("collection_")],
-        key=lambda d: d.stat().st_mtime,
+def calibration_file_from_path(config: dict[str, Any], path: Path) -> Path:
+    if path.is_file():
+        return path
+    if not path.is_dir():
+        raise FileNotFoundError(f"Calibration path not found: {path}")
+
+    npz_name = str(config_get(config, "calibration", "npz_file", "tag2flange_calibration_data.npz"))
+    json_name = str(config_get(config, "calibration", "json_file", "tag2flange_calibration_report.json"))
+    npz_path = path / npz_name
+    if npz_path.exists():
+        return npz_path
+    json_path = path / json_name
+    if json_path.exists():
+        return json_path
+    raise FileNotFoundError(
+        f"Calibration directory does not contain {npz_name} or {json_name}: {path}"
     )
-    if not candidates:
-        raise FileNotFoundError(
-            f"No collection_* calibration directories found under {root}. "
-            "Run tag2flange_calibration first."
-        )
-    return candidates[-1]
 
 
-def resolve_calibration(calibration_arg: str | None) -> Path:
+def resolve_calibration(config: dict[str, Any], calibration_arg: str | None) -> Path:
     """Return the path to a calibration NPZ bundle.
 
     If ``calibration_arg`` is given it is used directly (relative paths
@@ -103,23 +123,27 @@ def resolve_calibration(calibration_arg: str | None) -> Path:
     ``tag2flange_calibration_data.npz`` is selected.
     """
     if calibration_arg:
-        cp = Path(calibration_arg)
-        if cp.is_absolute():
-            return cp.resolve()
-        return (DATA_COLLECTION_ROOT / cp).resolve()
+        calibration_path = resolve_path(calibration_arg, base=DATA_COLLECTION_ROOT)
+        if calibration_path is None:
+            raise ValueError("Calibration path resolved to None.")
+        return calibration_file_from_path(config, calibration_path)
 
-    calib_dir = latest_calibration_dir(TAG2FLANGE_ROOT / "output")
-    npz_path = calib_dir / "tag2flange_calibration_data.npz"
-    if not npz_path.exists():
-        json_path = calib_dir / "tag2flange_calibration_report.json"
-        if json_path.exists():
-            # Fall back to JSON report (contains T_tag_to_flange as nested list)
-            return json_path
-        raise FileNotFoundError(
-            f"Neither tag2flange_calibration_data.npz nor "
-            f"tag2flange_calibration_report.json found in {calib_dir}."
-        )
-    return npz_path
+    configured_path = config_get(config, "calibration", "path")
+    if configured_path:
+        calibration_path = resolve_path(configured_path)
+        if calibration_path is None:
+            raise ValueError("Configured calibration path resolved to None.")
+        return calibration_file_from_path(config, calibration_path)
+
+    root = resolve_path(config_get(config, "paths", "calibration_root"), base=PROJECT_ROOT)
+    if root is None:
+        root = TAG2FLANGE_ROOT / "output"
+    root = root.resolve(strict=True)
+    dir_prefixes = config_get(config, "calibration", "dir_prefixes", ["experiment_", "collection_"])
+    calib_dir = latest_child_dir(root, [str(prefix) for prefix in dir_prefixes])
+    npz_name = str(config_get(config, "calibration", "npz_file", "tag2flange_calibration_data.npz"))
+    json_name = str(config_get(config, "calibration", "json_file", "tag2flange_calibration_report.json"))
+    return calibration_file_from_path(config, calib_dir)
 
 
 def load_tag_to_flange(calibration_path: Path) -> np.ndarray:
@@ -158,22 +182,6 @@ def load_visual_deltas(path: Path) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# Output helpers
-# ---------------------------------------------------------------------------
-
-def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
-
-
-def write_summary(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -191,7 +199,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Path to the hospital session directory "
-            "(e.g. ../hospital_data_collection/output/session_0001/)."
+            "(e.g. E:/hospital_collection/output/session_0001/)."
         ),
     )
     parser.add_argument(
@@ -200,13 +208,13 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Path to the hospital output root directory containing session_xxxx/ subdirectories. "
             "All sessions will be processed in batch. "
-            "(e.g. ../hospital_data_collection/output/). "
+            "(e.g. E:/hospital_collection/output/). "
             "Mutually exclusive with --session."
         ),
     )
     parser.add_argument(
         "--config",
-        default=str(PROJECT_ROOT / "config" / "preprocess_dataset.yaml"),
+        default=str(DEFAULT_CONFIG_PATH),
         help="Path to preprocessing YAML config file. (default: config/preprocess_dataset.yaml)",
     )
     parser.add_argument(
@@ -214,6 +222,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Path to tag2flange calibration NPZ or JSON report. "
+            "You may also pass a calibration run directory. "
             "Relative paths are resolved against the data-collection root. "
             "Defaults to the newest output bundle under tag2flange_calibration/output/."
         ),
@@ -243,44 +252,18 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # ── Load config ────────────────────────────────────────────────────
-    config_path = Path(args.config).resolve()
-    if config_path.exists():
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    else:
-        config = {}
-        print(f"[WARN] Config file not found: {config_path}, using defaults.")
+    config = load_config(args.config)
     session_layout = config.get("session_layout", {})
     pose_transform_cfg = config.get("pose_transform", {})
-
-    # ── Resolve session source (CLI > config > error) ───────────────────
-    if args.session and args.session_root:
-        parser.error("--session and --session-root are mutually exclusive.")
-    if not args.session and not args.session_root:
-        config_session_root = config.get("session_root")
-        if config_session_root:
-            args.session_root = str((PROJECT_ROOT / config_session_root).resolve())
-        else:
-            parser.error(
-                "Either --session or --session-root must be provided, "
-                "or set session_root in config/preprocess_dataset.yaml."
-            )
-
-    # ── Resolve session(s) ─────────────────────────────────────────────
-    session_dirs: list[Path] = []
-    if args.session_root:
-        root = Path(args.session_root).resolve(strict=True)
-        session_dirs = sorted(
-            [d for d in root.iterdir() if d.is_dir() and d.name.startswith("session_")],
-        )
-        if not session_dirs:
-            raise FileNotFoundError(f"No session_xxxx directories found under {root}")
-        print(f"[INFO] Found {len(session_dirs)} sessions under {root}")
-    else:
-        session_dirs = [Path(args.session).resolve(strict=True)]
+    session_dirs = resolve_session_dirs(
+        config=config,
+        session_arg=args.session,
+        session_root_arg=args.session_root,
+    )
+    print(f"[INFO] Found {len(session_dirs)} session(s).")
 
     # ── Load calibration ──────────────────────────────────────────────
-    calibration_path = resolve_calibration(args.calibration)
+    calibration_path = resolve_calibration(config, args.calibration)
     T_tag_to_flange = load_tag_to_flange(calibration_path)
     T_flange_to_tag = invert_transform(T_tag_to_flange)
 
@@ -295,10 +278,14 @@ def main() -> None:
         print(f"[INFO] Processing session ({session_idx}/{len(session_dirs)}): {session_dir.name}")
         print(f"{'='*60}")
 
-        output_dir = (
-            Path(args.output_dir).resolve()
-            if args.output_dir
-            else session_dir / pose_transform_cfg.get("output_subdir", "transformed_pose")
+        jsonl_path = output_path_for_session(
+            session_dir=session_dir,
+            output_dir_arg=args.output_dir,
+            output_subdir=str(pose_transform_cfg.get("output_subdir", "transformed_pose")),
+            file_name=str(pose_transform_cfg.get("output_file", "flange_pose_deltas.jsonl")),
+        )
+        summary_path = jsonl_path.parent / str(
+            pose_transform_cfg.get("summary_file", "flange_pose_deltas.summary.json")
         )
 
         # ── Load visual deltas ────────────────────────────────────────────
@@ -342,10 +329,6 @@ def main() -> None:
             output_record["calibration"] = str(calibration_path)
             output_records.append(output_record)
 
-        # ── Write output ──────────────────────────────────────────────────
-        jsonl_path = output_dir / "flange_pose_deltas.jsonl"
-        summary_path = output_dir / "flange_pose_deltas.summary.json"
-
         write_jsonl(jsonl_path, output_records)
 
         summary = {
@@ -359,7 +342,7 @@ def main() -> None:
             "total_sessions": len(session_dirs),
             "T_tag_to_flange": T_tag_to_flange.tolist(),
         }
-        write_summary(summary_path, summary)
+        write_json(summary_path, summary)
 
         print(f"[INFO] Transformed records written: {jsonl_path}")
         print(f"[INFO] Total transformed: {len(output_records)}, skipped: {skipped}")

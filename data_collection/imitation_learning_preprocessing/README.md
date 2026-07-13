@@ -1,93 +1,92 @@
-# Multimodal Preprocessing Workspace
+# imitation_learning_preprocessing
 
-This workspace converts raw pose, force, and ultrasound data into the dataset
-layout expected by `imitation_learing_v1`.
+This workspace post-processes collected hospital sessions for downstream
+imitation-learning datasets.
 
-## What It Does
+It currently provides two batch-friendly steps:
 
-- reads pose records from `.json` or `.jsonl`
-- reads force records from `.json`, `.jsonl`, or `.csv`
-- reads ultrasound image timestamps from `.json`, `.jsonl`, or `.csv`
-- aligns force and ultrasound to pose using `curr_host_timestamp_s`
-- drops frames when any modality exceeds the configured nearest-neighbor threshold
-- writes trajectory folders plus `train_manifest.json` / `val_manifest.json`
+1. transform AprilTag pose deltas into the robot flange frame
+2. apply the trained Paxini + IMU force-mapping model to hospital sessions
 
-## Recommended Raw Data Protocol
+Both scripts can read sessions from an external drive. Put the external drive
+session root in [config/preprocess_dataset.yaml](config/preprocess_dataset.yaml):
 
-### Pose
-
-Pose records should contain at least:
-
-- `curr_host_timestamp_s`
-- `delta_translation_xyz`
-- `delta_quaternion_xyzw`
-
-Supported file formats:
-
-- `.jsonl`: one JSON object per line
-- `.json`: either a top-level array or an object with `records`
-
-### Force
-
-Each force record should contain:
-
-- `host_timestamp_s`
-- `force`
-
-Examples:
-
-```json
-{"host_timestamp_s": 1712345678.123, "force": [0.1, 0.0, -0.2, 0.01, 0.02, 0.03]}
+```yaml
+paths:
+  session_root: E:/hospital_collection/output
 ```
 
-CSV is also supported. Either use a `force` column containing a JSON-style list,
-or provide scalar columns such as `fx, fy, fz, mx, my, mz`.
-
-### Ultrasound
-
-Keep image files in one directory and store timestamps in one shared index file.
-
-Recommended `jsonl` index:
-
-```json
-{"image": "frame_000001.png", "host_timestamp_s": 1712345678.125}
-{"image": "frame_000002.png", "host_timestamp_s": 1712345678.158}
-```
-
-The `image` field may be absolute, or relative to `images_dir`.
-
-## Output Layout
+Outputs are written back into each session directory by default, so data on a
+mobile drive stays on that same drive:
 
 ```text
-dataset/
-  manifests/
-    train_manifest.json
-    val_manifest.json
-  trajectories/
-    traj_0001/
-      images/
-      metadata.json
+session_0001/
+  visual_pose/tag_pose_deltas.jsonl
+  imu/imu_pitch_roll.jsonl
+  paxini_force/left_sensor.jsonl
+  paxini_force/right_sensor.jsonl
+  transformed_pose/flange_pose_deltas.jsonl
+  predicted_force/predicted_force.jsonl
 ```
 
-`metadata.json` stores one ordered frame list per trajectory. Each frame includes
-the training fields:
+## Scripts
 
-- `image`
-- `pose_delta_7d`
-- `force`
+### Transform Pose To Flange
 
-It also keeps alignment debug fields such as source timestamps and time deltas.
-
-## Config
-
-See [config/preprocess_dataset.yaml](C:/Users/zhj80/OneDrive/Desktop/Master%20Course%20Material/research/data_collection/preprocessing/config/preprocess_dataset.yaml)
-for an example configuration.
-
-Each trajectory entry usually represents one continuous collection session.
-
-## Usage
-
-```bash
-python data_collection/preprocessing/scripts/build_imitation_dataset.py ^
-  --config data_collection/preprocessing/config/preprocess_dataset.yaml
+```powershell
+python scripts/transform_pose_to_flange.py --config config/preprocess_dataset.yaml
 ```
+
+By default this processes all `session_*` folders under `paths.session_root`.
+It loads the newest tag-to-flange calibration from `paths.calibration_root`,
+supporting current `experiment_*` outputs and older `collection_*` outputs.
+
+Useful overrides:
+
+```powershell
+python scripts/transform_pose_to_flange.py --session session_0003
+python scripts/transform_pose_to_flange.py --session-root E:/hospital_collection/output
+python scripts/transform_pose_to_flange.py --calibration E:/calibration/tag2flange_calibration_data.npz
+python scripts/transform_pose_to_flange.py --calibration E:/research_data/experienment/pose_experienment/experiment_full_degree_freedom_20260708_150826
+```
+
+### Apply Force Mapping
+
+```powershell
+python scripts/apply_force_mapping.py --config config/preprocess_dataset.yaml
+```
+
+By default this processes all `session_*` folders under `paths.session_root`.
+It loads the newest `model.pt` under `paths.model_root` unless
+`model.checkpoint` or `--checkpoint` is provided.
+
+Useful overrides:
+
+```powershell
+python scripts/apply_force_mapping.py --session session_0003
+python scripts/apply_force_mapping.py --session-root E:/hospital_collection/output
+python scripts/apply_force_mapping.py --checkpoint E:/models/my_run/model.pt
+python scripts/apply_force_mapping.py --checkpoint E:/models/my_run
+```
+
+## Configuration
+
+Important fields in `config/preprocess_dataset.yaml`:
+
+- `paths.session_root`: where collected sessions live; use an absolute external-drive path when needed
+- `paths.calibration_root`: directory containing tag-to-flange calibration runs
+- `paths.model_root`: directory containing force-mapping training runs
+- `session_layout`: subdirectory and file names inside each session
+- `pose_transform`: output folder/file names for transformed pose deltas
+- `force_mapping`: output folder/file names and timestamp matching threshold
+
+## Shared Module
+
+Common path, config, session-scanning, and JSON writing logic lives in:
+
+```text
+module/common.py
+```
+
+The scripts keep only their domain-specific work: pose geometry or model
+inference.

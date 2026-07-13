@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import yaml
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +14,22 @@ DATA_COLLECTION_ROOT = PROJECT_ROOT.parent
 
 # Path to paxini26D_mapping source so we can import its model and utilities.
 PAXINI26D_SRC = DATA_COLLECTION_ROOT / "paxini26D_mapping" / "src"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 if str(PAXINI26D_SRC) not in sys.path:
     sys.path.insert(0, str(PAXINI26D_SRC))
 
+from module.common import (  # noqa: E402
+    DEFAULT_CONFIG_PATH,
+    config_get,
+    latest_matching_file,
+    load_config,
+    output_path_for_session,
+    resolve_path,
+    resolve_session_dirs,
+    write_json,
+    write_jsonl,
+)
 from paxini26d_mapping.dataset import nearest_record, parse_timed_records  # noqa: E402
 from paxini26d_mapping.training import MLPRegressor  # noqa: E402
 
@@ -48,7 +60,16 @@ def build_feature_values(
     return [feature_map[name] for name in feature_names]
 
 
-def resolve_checkpoint(checkpoint_arg: str | None) -> Path:
+def checkpoint_file_from_path(config: dict[str, Any], path: Path) -> Path:
+    if path.is_file():
+        return path
+    if not path.is_dir():
+        raise FileNotFoundError(f"Checkpoint path not found: {path}")
+    patterns = config_get(config, "model", "checkpoint_patterns", ["model.pt", "*/model.pt", "run_*/model.pt"])
+    return latest_matching_file(path, [str(pattern) for pattern in patterns])
+
+
+def resolve_checkpoint(config: dict[str, Any], checkpoint_arg: str | None) -> Path:
     """Return the path to a trained model checkpoint.
 
     If ``checkpoint_arg`` is given it is used directly (relative paths are
@@ -56,19 +77,29 @@ def resolve_checkpoint(checkpoint_arg: str | None) -> Path:
     ``run_*/model.pt`` under ``paxini26D_mapping/model/`` is selected.
     """
     if checkpoint_arg:
-        cp = Path(checkpoint_arg)
-        if cp.is_absolute():
-            return cp.resolve()
-        return (DATA_COLLECTION_ROOT / cp).resolve()
+        checkpoint_path = resolve_path(checkpoint_arg, base=DATA_COLLECTION_ROOT)
+        if checkpoint_path is None:
+            raise ValueError("Checkpoint path resolved to None.")
+        return checkpoint_file_from_path(config, checkpoint_path)
 
-    model_root = DATA_COLLECTION_ROOT / "paxini26D_mapping" / "model"
-    candidates = sorted(model_root.glob("run_*/model.pt"), key=lambda p: p.stat().st_mtime)
-    if not candidates:
+    configured_checkpoint = config_get(config, "model", "checkpoint")
+    if configured_checkpoint:
+        checkpoint_path = resolve_path(configured_checkpoint)
+        if checkpoint_path is None:
+            raise ValueError("Configured checkpoint path resolved to None.")
+        return checkpoint_file_from_path(config, checkpoint_path)
+
+    model_root = resolve_path(config_get(config, "paths", "model_root"), base=PROJECT_ROOT)
+    if model_root is None:
+        model_root = DATA_COLLECTION_ROOT / "paxini26D_mapping" / "model"
+    patterns = config_get(config, "model", "checkpoint_patterns", ["*/model.pt", "run_*/model.pt"])
+    try:
+        return latest_matching_file(model_root.resolve(strict=True), [str(pattern) for pattern in patterns])
+    except FileNotFoundError as exc:
         raise FileNotFoundError(
             f"No model checkpoint found under {model_root}. "
             "Train the force-mapping model first, or provide an explicit --checkpoint path."
-        )
-    return candidates[-1]
+        ) from exc
 
 
 def load_model(checkpoint_path: Path) -> tuple[MLPRegressor, dict[str, Any]]:
@@ -87,18 +118,6 @@ def load_model(checkpoint_path: Path) -> tuple[MLPRegressor, dict[str, Any]]:
     return model, checkpoint
 
 
-def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as handle:
-        for record in records:
-            handle.write(json.dumps(record, ensure_ascii=True) + "\n")
-
-
-def write_summary(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -110,7 +129,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config",
-        default=str(PROJECT_ROOT / "config" / "preprocess_dataset.yaml"),
+        default=str(DEFAULT_CONFIG_PATH),
         help="Path to preprocessing YAML config file. (default: config/preprocess_dataset.yaml)",
     )
     parser.add_argument(
@@ -118,7 +137,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Path to the hospital session directory "
-            "(e.g. ../hospital_data_collection/output/session_0001/)."
+            "(e.g. E:/hospital_collection/output/session_0001/)."
         ),
     )
     parser.add_argument(
@@ -127,7 +146,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Path to the hospital output root directory containing session_xxxx/ subdirectories. "
             "All sessions will be processed in batch. "
-            "(e.g. ../hospital_data_collection/output/). "
+            "(e.g. E:/hospital_collection/output/). "
             "Mutually exclusive with --session."
         ),
     )
@@ -136,7 +155,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Path to a trained model.pt checkpoint.  Relative paths are resolved against "
-            "the data-collection root.  Defaults to the newest run_*/model.pt under "
+            "the data-collection root. You may also pass a model run directory. "
+            "Defaults to the newest configured model.pt under "
             "paxini26D_mapping/model/."
         ),
     )
@@ -170,41 +190,15 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # ── Load config ────────────────────────────────────────────────────
-    config_path = Path(args.config).resolve()
-    if config_path.exists():
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-    else:
-        config = {}
-        print(f"[WARN] Config file not found: {config_path}, using defaults.")
+    config = load_config(args.config)
     session_layout = config.get("session_layout", {})
     force_mapping_cfg = config.get("force_mapping", {})
-
-    # ── Resolve session source (CLI > config > error) ───────────────────
-    if args.session and args.session_root:
-        parser.error("--session and --session-root are mutually exclusive.")
-    if not args.session and not args.session_root:
-        config_session_root = config.get("session_root")
-        if config_session_root:
-            args.session_root = str((PROJECT_ROOT / config_session_root).resolve())
-        else:
-            parser.error(
-                "Either --session or --session-root must be provided, "
-                "or set session_root in config/preprocess_dataset.yaml."
-            )
-
-    # ── Resolve session(s) ─────────────────────────────────────────────
-    session_dirs: list[Path] = []
-    if args.session_root:
-        root = Path(args.session_root).resolve(strict=True)
-        session_dirs = sorted(
-            [d for d in root.iterdir() if d.is_dir() and d.name.startswith("session_")],
-        )
-        if not session_dirs:
-            raise FileNotFoundError(f"No session_xxxx directories found under {root}")
-        print(f"[INFO] Found {len(session_dirs)} sessions under {root}")
-    else:
-        session_dirs = [Path(args.session).resolve(strict=True)]
+    session_dirs = resolve_session_dirs(
+        config=config,
+        session_arg=args.session,
+        session_root_arg=args.session_root,
+    )
+    print(f"[INFO] Found {len(session_dirs)} session(s).")
 
     for session_dir in session_dirs:
         print(f"\n{'='*60}")
@@ -222,11 +216,13 @@ def _process_session(
     session_layout: dict[str, Any],
     force_mapping_cfg: dict[str, Any],
 ) -> None:
-    output_dir = (
-        Path(args.output_dir).resolve()
-        if args.output_dir
-        else session_dir / force_mapping_cfg.get("output_subdir", "predicted_force")
+    output_path = output_path_for_session(
+        session_dir=session_dir,
+        output_dir_arg=args.output_dir,
+        output_subdir=str(force_mapping_cfg.get("output_subdir", "predicted_force")),
+        file_name=str(force_mapping_cfg.get("output_file", "predicted_force.jsonl")),
     )
+    summary_path = output_path.parent / str(force_mapping_cfg.get("summary_file", "predicted_force.summary.json"))
     max_delta_s = (
         args.max_time_delta_s
         if args.max_time_delta_s is not None
@@ -249,7 +245,7 @@ def _process_session(
             raise FileNotFoundError(f"{label} file not found: {path}")
 
     # ── Load model ────────────────────────────────────────────────────
-    checkpoint_path = resolve_checkpoint(args.checkpoint)
+    checkpoint_path = resolve_checkpoint(config, args.checkpoint)
     model, checkpoint = load_model(checkpoint_path)
     feature_mean = checkpoint["feature_mean"].float()
     feature_std = checkpoint["feature_std"].float()
@@ -328,15 +324,12 @@ def _process_session(
             )
 
     # ── Write output ──────────────────────────────────────────────────
-    jsonl_path = output_dir / "predicted_force.jsonl"
-    summary_path = output_dir / "predicted_force.summary.json"
-
-    write_jsonl(jsonl_path, output_records)
+    write_jsonl(output_path, output_records)
 
     summary = {
         "session_dir": str(session_dir),
         "checkpoint_path": str(checkpoint_path),
-        "output_path": str(jsonl_path),
+        "output_path": str(output_path),
         "num_imu_records": len(imu_records),
         "num_left_records": len(left_records),
         "num_right_records": len(right_records),
@@ -346,9 +339,9 @@ def _process_session(
         "feature_names": feature_names,
         "target_names": target_names,
     }
-    write_summary(summary_path, summary)
+    write_json(summary_path, summary)
 
-    print(f"[INFO] Predictions written: {jsonl_path}")
+    print(f"[INFO] Predictions written: {output_path}")
     print(f"[INFO] Summary: {summary_path}")
     print(f"[INFO] Total predictions: {len(output_records)}, skipped: {skipped}")
 
