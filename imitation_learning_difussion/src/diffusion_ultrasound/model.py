@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import Optional
 
 import torch
 from torch import nn
@@ -58,7 +59,7 @@ class ResNet18ConditionedDenoiser(nn.Module):
             nn.Linear(hidden_dim, flat_action_dim),
         )
 
-    def forward(self, noisy_action: torch.Tensor, image: torch.Tensor, timesteps: torch.Tensor, force: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(self, noisy_action: torch.Tensor, image: torch.Tensor, timesteps: torch.Tensor, force: Optional[torch.Tensor] = None) -> torch.Tensor:
         image_features = self.encoder(image)
         time_features = self.time_embedding(timesteps)
         flat_action = noisy_action.flatten(start_dim=1)
@@ -81,4 +82,3 @@ class LinearNoiseScheduler:
     def add_noise(self, clean: torch.Tensor, noise: torch.Tensor, timesteps: torch.Tensor) -> torch.Tensor:
         alpha_bar = self.alpha_bars[timesteps].view(-1, 1, 1)
         return torch.sqrt(alpha_bar) * clean + torch.sqrt(1.0 - alpha_bar) * noise
-

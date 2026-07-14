@@ -80,8 +80,10 @@ def main() -> None:
 
     train_dataset = UltrasoundActionChunkDataset(config["dataset"]["dataset_root"], "train", version, transform=transform)
     val_dataset = UltrasoundActionChunkDataset(config["dataset"]["dataset_root"], "val", version, transform=transform)
+    test_dataset = UltrasoundActionChunkDataset(config["dataset"]["dataset_root"], "test", version, transform=transform)
     train_loader = DataLoader(train_dataset, batch_size=int(config["training"]["batch_size"]), shuffle=True, num_workers=int(config["training"].get("num_workers", 0)))
     val_loader = DataLoader(val_dataset, batch_size=int(config["training"]["batch_size"]), shuffle=False, num_workers=int(config["training"].get("num_workers", 0)))
+    test_loader = DataLoader(test_dataset, batch_size=int(config["training"]["batch_size"]), shuffle=False, num_workers=int(config["training"].get("num_workers", 0)))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = ACTPolicy(
@@ -111,7 +113,14 @@ def main() -> None:
         if val_loss < best_val:
             best_val = val_loss
             torch.save({"model_state_dict": model.state_dict(), "config": config, "history": history}, output_dir / "best.pt")
-    save_json(output_dir / "summary.json", {"best_val_loss": best_val, "history": history, "config": config})
+    checkpoint = torch.load(output_dir / "best.pt", map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    test_loss = run_epoch(model, test_loader, criterion, None, device, include_force, epoch=0, mode="test")
+    print(f"test_loss={test_loss:.6f}")
+    save_json(
+        output_dir / "summary.json",
+        {"best_val_loss": best_val, "test_loss": test_loss, "history": history, "config": config},
+    )
 
 
 if __name__ == "__main__":

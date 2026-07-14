@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 from PIL import Image
 import torch
@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 
 class DiffusionActionChunkDataset(Dataset):
-    def __init__(self, dataset_root: str | Path, split: str, version: str, transform=None) -> None:
+    def __init__(self, dataset_root: Union[str, Path], split: str, version: str, transform=None) -> None:
         self.root = Path(dataset_root).resolve() / version / split
         self.transform = transform
         samples_path = self.root / "samples.json"
@@ -33,4 +33,3 @@ class DiffusionActionChunkDataset(Dataset):
         if "force" in sample:
             item["force"] = torch.tensor([float(sample["force"])], dtype=torch.float32)
         return item
-
