@@ -1,7 +1,0 @@
-{
-  "dataset_path": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/paxini26D_mapping/dataset/test1.pt",
-  "num_sessions_scanned": 7,
-  "num_samples": 2428,
-  "feature_dim": 8,
-  "target_dim": 1
-}

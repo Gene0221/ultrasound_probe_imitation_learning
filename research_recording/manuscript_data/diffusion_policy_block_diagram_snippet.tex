@@ -1,6 +1,0 @@
-\begin{figure}[!htbp]
-    \centering
-    \includegraphics[width=\columnwidth]{figures/diffusion_policy_block_diagram_compact.pdf}
-    \caption{Block diagram of the ResNet18-conditioned diffusion policy used for data validity validation. The ultrasound image is encoded by ResNet18 to form an image condition. A future flange pose-delta chunk is corrupted by Gaussian noise according to diffusion step $k$, and an MLP denoiser predicts the injected noise from the noisy action chunk, timestep information, and image condition.}
-    \label{fig:diffusion_policy_block_diagram}
-\end{figure}
