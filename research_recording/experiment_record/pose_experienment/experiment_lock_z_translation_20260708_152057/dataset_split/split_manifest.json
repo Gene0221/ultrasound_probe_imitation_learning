@@ -1,0 +1,10 @@
+{
+  "train_ratio": 0.8,
+  "split_seed": 42,
+  "train_samples": 872,
+  "test_samples": 218,
+  "train_npz": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_z_translation_20260708_152057/dataset_split/train_pairs.npz",
+  "test_npz": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_z_translation_20260708_152057/dataset_split/test_pairs.npz",
+  "train_jsonl": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_z_translation_20260708_152057/dataset_split/train_pairs.jsonl",
+  "test_jsonl": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_z_translation_20260708_152057/dataset_split/test_pairs.jsonl"
+}

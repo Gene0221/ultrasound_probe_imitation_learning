@@ -1,0 +1,35 @@
+\subsection{Rigid Transformation Validation}
+
+The rigid transformation experiment validates the pose-conversion step that maps marker motion measured by the external camera to the robot end-effector frame. Seven calibration sequences were collected: one full six-degree-of-freedom motion sequence and six axis-constrained sequences that isolated translational or rotational excitation along the robot-frame axes. For each sequence, AprilTag-based visual motion increments were paired with Franka end-effector motion increments according to host timestamps, and the resulting pairs were divided into training and held-out test sets using an 80/20 split. This procedure produced 6628 matched visual-robot motion pairs across all sequences.
+
+Figure~\ref{fig:rigid_transform_validation} summarizes the held-out residuals, train-test gaps, and timestamp-pairing quality. In the full six-degree-of-freedom sequence, the calibrated transformation achieved a test translational error of 2.73 mm and a test rotational error of 1.24$^\circ$, with P95 errors of 5.85 mm and 2.71$^\circ$, respectively. The corresponding train-test gaps were small (-0.079 mm for translation and -0.107$^\circ$ for rotation), indicating that the estimated transformation remained consistent on unseen motion pairs rather than fitting only the calibration trajectory.
+
+The axis-constrained sequences provide a complementary check on the same transformation under motions that emphasize individual translation or rotation components. Across the seven sequences, the mean held-out translational error was 4.05 mm and the mean held-out rotational error was 1.31$^\circ$. The timestamp pairing was also stable: the mean visual-robot time difference was 8.77 ms, and the largest observed test-set difference was 16.72 ms, well below the 50 ms pairing threshold. These results indicate that the calibrated marker-to-flange transformation is sufficiently stable to serve as a fixed conversion parameter when hospital-side marker trajectories are migrated into the robot end-effector representation.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/rigid_transform_validation_results_large_font.pdf}
+    \caption{Rigid transformation validation for pose conversion. (A) Held-out translation and rotation residuals for the full six-degree-of-freedom and axis-constrained calibration sequences. Bars show mean residuals and horizontal markers show P95 residuals. (B) Test-train generalization gaps for translation and rotation residuals. (C) Visual-robot timestamp-pairing quality on the held-out test split.}
+    \label{fig:rigid_transform_validation}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Rigid transformation validation across full and axis-constrained calibration motions. Translation errors are reported in millimeters and rotation errors in degrees on the held-out test split.}
+\label{tab:rigid_transform_validation}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule
+Motion & Matched & Train/Test & Trans. mean & Trans. P95 & Rot. mean & Rot. P95 \\
+\midrule
+Full 6-DoF & 1141 & 913/228 & 2.73 & 5.85 & 1.24 & 2.71 \\
+Lock X trans. & 787 & 630/157 & 3.95 & 8.87 & 1.54 & 3.05 \\
+Lock Y trans. & 858 & 686/172 & 4.72 & 10.94 & 1.47 & 3.62 \\
+Lock Z trans. & 1090 & 872/218 & 3.36 & 7.72 & 1.47 & 3.35 \\
+Lock X rot. & 978 & 782/196 & 5.33 & 9.72 & 1.05 & 2.67 \\
+Lock Y rot. & 888 & 710/178 & 3.56 & 8.14 & 1.52 & 2.83 \\
+Lock Z rot. & 886 & 709/177 & 4.68 & 10.62 & 0.88 & 1.78 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

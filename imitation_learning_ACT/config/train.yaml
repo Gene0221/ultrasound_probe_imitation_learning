@@ -8,6 +8,9 @@ model:
   pretrained_resnet18: true
   freeze_encoder: false
   hidden_dim: 512
+  nhead: 8
+  num_decoder_layers: 4
+  dim_feedforward: 2048
   dropout: 0.1
   action_dim: 7
   force_dim: 1
@@ -21,4 +24,3 @@ training:
   num_workers: 0
   seed: 42
   loss: l1
-

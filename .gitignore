@@ -101,3 +101,4 @@ data_collection/visual_pose_tracking/output/
 !**/datasets/.gitkeep
 
 literature/
+experiment/

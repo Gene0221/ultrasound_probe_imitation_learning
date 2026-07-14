@@ -1,0 +1,183 @@
+{
+  "experiment_id": "lock_x_rotation",
+  "visual_log": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/visual_pose/tag_pose_deltas.jsonl",
+  "real_log": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/real_pose/franka_ee_pose_deltas.jsonl",
+  "timestamp_key": "curr_host_timestamp_s",
+  "transform_key": "delta_transform_prev_to_curr",
+  "visual_records": 978,
+  "real_records": 1637,
+  "matched_samples": 978,
+  "skipped_samples_due_to_time_diff": 0,
+  "max_time_diff_s": 0.05,
+  "split": {
+    "train_ratio": 0.8,
+    "split_seed": 42,
+    "train_samples": 782,
+    "test_samples": 196,
+    "train_npz": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/dataset_split/train_pairs.npz",
+    "test_npz": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/dataset_split/test_pairs.npz",
+    "train_jsonl": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/dataset_split/train_pairs.jsonl",
+    "test_jsonl": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/tag2flange_calibration/output/experiment_lock_x_rotation_20260708_152314/dataset_split/test_pairs.jsonl"
+  },
+  "estimated_transforms": {
+    "T_tag_to_flange": [
+      [
+        0.30254154988294973,
+        0.004274440053562103,
+        0.9531266126578635,
+        0.014833627208776477
+      ],
+      [
+        0.8404712749128055,
+        0.4704306770273238,
+        -0.26889219802377584,
+        -0.10080438980140395
+      ],
+      [
+        -0.4495293612667209,
+        0.8824266016354237,
+        0.1387322820589759,
+        -0.0037664251369011054
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "T_flange_to_tag": [
+      [
+        0.30254154988294973,
+        0.8404712749128055,
+        -0.4495293612667209,
+        0.07854228676101419
+      ],
+      [
+        0.004274440053562103,
+        0.4704306770273238,
+        0.8824266016354237,
+        0.05068166562518979
+      ],
+      [
+        0.9531266126578635,
+        -0.26889219802377584,
+        0.1387322820589759,
+        -0.040721314044629066
+      ],
+      [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "residuals": {
+    "rotation_deg_stats": {
+      "count": 978.0,
+      "mean": 1.2144966441204603,
+      "median": 0.8707329641028931,
+      "std": 1.7214887298507584,
+      "min": 0.03679826658933423,
+      "max": 21.250395995063478,
+      "p90": 2.110202676647238,
+      "p95": 2.7984058496534083
+    },
+    "translation_m_stats": {
+      "count": 978.0,
+      "mean": 0.00540179094182549,
+      "median": 0.0049176474531869106,
+      "std": 0.002908208015105332,
+      "min": 0.00021046555964676395,
+      "max": 0.020606591103741707,
+      "p90": 0.009357631420853989,
+      "p95": 0.010784407745332061
+    },
+    "frobenius_stats": {
+      "count": 978.0,
+      "mean": 0.030850476247259746,
+      "median": 0.022439872428791148,
+      "std": 0.042159215114976646,
+      "min": 0.0020344359278301706,
+      "max": 0.521578273724938,
+      "p90": 0.05234642080741253,
+      "p95": 0.06927640149341517
+    }
+  },
+  "train_residuals": {
+    "rotation_deg_stats": {
+      "count": 782.0,
+      "mean": 1.2554116462277813,
+      "median": 0.9057105020986589,
+      "std": 1.8404622098099084,
+      "min": 0.061051961373129224,
+      "max": 21.250395995063478,
+      "p90": 2.12854609577127,
+      "p95": 2.7942531299682196
+    },
+    "translation_m_stats": {
+      "count": 782.0,
+      "mean": 0.005419060544027295,
+      "median": 0.004914518374931459,
+      "std": 0.0029823481655689324,
+      "min": 0.00023675723204405878,
+      "max": 0.020606591103741707,
+      "p90": 0.009489296059587399,
+      "p95": 0.011137862515700975
+    },
+    "frobenius_stats": {
+      "count": 782.0,
+      "mean": 0.031844690210652296,
+      "median": 0.023050648577067734,
+      "std": 0.045085674436674064,
+      "min": 0.0020344359278301706,
+      "max": 0.521578273724938,
+      "p90": 0.05286614129510599,
+      "p95": 0.06925185979140344
+    }
+  },
+  "test_residuals": {
+    "rotation_deg_stats": {
+      "count": 196.0,
+      "mean": 1.051254135712679,
+      "median": 0.7453709170252175,
+      "std": 1.1132878020384596,
+      "min": 0.03679826658933423,
+      "max": 11.854031685669428,
+      "p90": 1.889801606027946,
+      "p95": 2.6692199403387153
+    },
+    "translation_m_stats": {
+      "count": 196.0,
+      "mean": 0.005332888753448898,
+      "median": 0.005078677070032697,
+      "std": 0.002590228936425437,
+      "min": 0.00021046555964676395,
+      "max": 0.015310581956339803,
+      "p90": 0.009128518353295072,
+      "p95": 0.00971663268087012
+    },
+    "frobenius_stats": {
+      "count": 196.0,
+      "mean": 0.02688376543413235,
+      "median": 0.019265597462119415,
+      "std": 0.027185504887808267,
+      "min": 0.0035801410728452357,
+      "max": 0.29213527359503993,
+      "p90": 0.047361848954435876,
+      "p95": 0.06619208029301218
+    }
+  },
+  "evaluation": {
+    "train_translation_mean_m": 0.005419060544027295,
+    "test_translation_mean_m": 0.005332888753448898,
+    "translation_mean_gap_m": -8.617179057839736e-05,
+    "train_translation_mean_mm": 5.419060544027295,
+    "test_translation_mean_mm": 5.332888753448898,
+    "translation_mean_gap_mm": -0.08617179057839736,
+    "train_rotation_mean_deg": 1.2554116462277813,
+    "test_rotation_mean_deg": 1.051254135712679,
+    "rotation_mean_gap_deg": -0.20415751051510234
+  }
+}

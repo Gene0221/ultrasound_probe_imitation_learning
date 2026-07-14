@@ -1,0 +1,33 @@
+{
+  "session_id": "session_0007",
+  "start_time_utc": "2026-07-08T09:18:33.564183+00:00",
+  "end_time_utc": "2026-07-08T09:18:51.069860+00:00",
+  "status": "paused",
+  "modules": [
+    {
+      "name": "imu",
+      "output_subdir": "imu",
+      "initialized": true,
+      "healthy": true,
+      "placeholder": false,
+      "message": "Workspace detected."
+    },
+    {
+      "name": "paxini",
+      "output_subdir": "paxini",
+      "initialized": true,
+      "healthy": true,
+      "placeholder": false,
+      "message": "Workspace detected; Paxini zero-calibration is configured."
+    },
+    {
+      "name": "force6d",
+      "output_subdir": "force6d",
+      "initialized": true,
+      "healthy": true,
+      "placeholder": false,
+      "message": "Workspace detected."
+    }
+  ],
+  "error_message": null
+}

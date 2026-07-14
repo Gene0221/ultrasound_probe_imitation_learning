@@ -1,0 +1,68 @@
+{
+  "device_name": "Intel RealSense D435I",
+  "device_serial_no": "337122072369",
+  "output_root": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/paxini26D_mapping/sessions/session_0003/imu",
+  "jsonl_path": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/paxini26D_mapping/sessions/session_0003/imu/imu_pitch_roll.jsonl",
+  "first_host_timestamp_s": 1783502193.8209991,
+  "last_host_timestamp_s": 1783502210.451106,
+  "num_records": 482,
+  "config": {
+    "output_root": "output",
+    "logging_root": "logs",
+    "behavior": {
+      "allow_degraded_start": true,
+      "start_pause_key": "ENTER",
+      "quit_key": "q"
+    },
+    "modules": {
+      "imu": {
+        "enabled": true,
+        "adapter": "imu",
+        "allow_placeholder": false,
+        "output_subdir": ".",
+        "initialize_command": null,
+        "command": [
+          "python",
+          "scripts/log_d435i_pitch_roll.py",
+          "--config",
+          "config/default.yaml"
+        ],
+        "workdir": "."
+      }
+    },
+    "device": {
+      "serial_no": "337122072369"
+    },
+    "imu": {
+      "accel_hz": 200,
+      "gyro_hz": 200
+    },
+    "calibration": {
+      "stationary_duration_s": 2.0
+    },
+    "filter": {
+      "accel_low_pass_alpha": 0.9
+    },
+    "sampling": {
+      "output_hz": 30.0,
+      "max_samples": null
+    },
+    "output": {
+      "output_root": "output",
+      "jsonl_file_name": "imu_pitch_roll.jsonl",
+      "summary_file_name": "summary.json",
+      "write_jsonl": true,
+      "print_stdout": false
+    },
+    "recording": {
+      "include_device_timestamp_ms": true,
+      "include_frame_number": true,
+      "include_raw_accel_xyz": false,
+      "include_raw_gyro_xyz": false,
+      "include_tilt_deg": true
+    },
+    "_runtime": {
+      "control_file": "/home/scupi-r/Gene/ultrasound_probe_imitation_learning/data_collection/paxini26D_mapping/logs/run_20260708T091448Z/controls/imu_control.json"
+    }
+  }
+}

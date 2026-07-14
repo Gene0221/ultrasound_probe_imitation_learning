@@ -35,17 +35,31 @@ dataset_root/
 
 ## Training
 
-Train the baseline ACT-style chunk regressor:
+Train the ACT Transformer chunk policy:
 
 ```powershell
 python scripts/train.py --config config/train.yaml
 ```
 
-The baseline is:
+The model is:
 
 ```text
-ultrasound image -> ResNet18 -> MLP -> future pose delta chunk
+ultrasound image
+  -> ResNet18 feature map
+  -> visual tokens + positional embedding
+  -> Transformer decoder cross-attention from action queries
+  -> future pose delta chunk
 ```
 
-For `with_force`, the 1D force value is concatenated to the image feature.
+Each future step has one learnable action query, so `action_horizon=20`
+produces 20 decoded action tokens. Each token is mapped to one 7D flange
+pose delta `[dx, dy, dz, dqx, dqy, dqz, dqw]`.
 
+For `with_force`, the 1D normal force value is projected as an extra memory
+token for the Transformer decoder.
+
+The default supervised objective is chunk-level L1 loss:
+
+```text
+L = mean(|predicted_pose_delta_chunk - target_pose_delta_chunk|)
+```

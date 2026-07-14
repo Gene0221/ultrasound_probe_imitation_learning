@@ -6,7 +6,7 @@ from pathlib import Path
 import random
 import re
 import shutil
-from typing import Any
+from typing import Any, Optional, Union
 
 import yaml
 
@@ -17,7 +17,7 @@ except ImportError:  # pragma: no cover - convenience fallback for minimal envir
         return iterable
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
+def load_config(path: Union[str, Path]) -> dict[str, Any]:
     config_path = Path(path).resolve()
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     if not isinstance(payload, dict):
@@ -25,7 +25,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def session_sort_key(path: Path, prefix: str) -> tuple[int, int | str]:
+def session_sort_key(path: Path, prefix: str) -> tuple[int, Union[int, str]]:
     suffix = path.name[len(prefix) :]
     if suffix.isdigit():
         return (0, int(suffix))
@@ -57,7 +57,7 @@ def timestamp_of(record: dict[str, Any]) -> float:
     raise KeyError("Record has no host_timestamp_s or curr_host_timestamp_s.")
 
 
-def nearest_index(timestamp_s: float, timestamps: list[float]) -> tuple[int | None, float]:
+def nearest_index(timestamp_s: float, timestamps: list[float]) -> tuple[Optional[int], float]:
     if not timestamps:
         return None, float("inf")
     insert_index = bisect_left(timestamps, timestamp_s)
@@ -240,7 +240,7 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
-def build_dataset(config_path: str | Path) -> dict[str, Any]:
+def build_dataset(config_path: Union[str, Path]) -> dict[str, Any]:
     config = load_config(config_path)
     session_root = Path(str(config["input"]["session_root"])).resolve()
     session_prefix = str(config["input"].get("session_prefix", "session_"))

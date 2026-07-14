@@ -21,12 +21,12 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from act_ultrasound.dataset import UltrasoundActionChunkDataset  # noqa: E402
-from act_ultrasound.model import ResNet18ActionChunkPolicy  # noqa: E402
+from act_ultrasound.model import ACTPolicy  # noqa: E402
 from act_ultrasound.train_utils import save_json, set_seed  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train an ACT-style ResNet18 action-chunk policy.")
+    parser = argparse.ArgumentParser(description="Train an ACT Transformer action-chunk policy.")
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "train.yaml"))
     return parser.parse_args()
 
@@ -84,11 +84,14 @@ def main() -> None:
     val_loader = DataLoader(val_dataset, batch_size=int(config["training"]["batch_size"]), shuffle=False, num_workers=int(config["training"].get("num_workers", 0)))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = ResNet18ActionChunkPolicy(
+    model = ACTPolicy(
         action_horizon=int(config["model"].get("action_horizon", config["dataset"].get("action_horizon", 20))),
         action_dim=int(config["model"].get("action_dim", 7)),
         force_dim=int(config["model"].get("force_dim", 1 if include_force else 0)) if include_force else 0,
         hidden_dim=int(config["model"].get("hidden_dim", 512)),
+        nhead=int(config["model"].get("nhead", 8)),
+        num_decoder_layers=int(config["model"].get("num_decoder_layers", 4)),
+        dim_feedforward=int(config["model"].get("dim_feedforward", 2048)),
         dropout=float(config["model"].get("dropout", 0.1)),
         pretrained=bool(config["model"].get("pretrained_resnet18", True)),
         freeze_encoder=bool(config["model"].get("freeze_encoder", False)),
