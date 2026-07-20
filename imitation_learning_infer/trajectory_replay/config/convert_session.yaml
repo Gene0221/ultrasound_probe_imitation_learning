@@ -1,0 +1,23 @@
+paths:
+  # Processed session directory produced by data_collection/imitation_learning_preprocessing.
+  # Absolute Windows paths are supported, for example:
+  # session: E:/research_data/rotate/output/session_0001
+  session: E:/research_data/rotate/output/session_0001
+
+input:
+  # Optional explicit input files. Leave empty to use session_layout below.
+  pose_file:
+  force_file:
+
+session_layout:
+  pose_subdir: transformed_pose
+  pose_file: flange_pose_deltas.jsonl
+  force_subdir: predicted_force
+  force_file: predicted_force.jsonl
+
+replay:
+  output_subdir: franka_replay
+  output_file: replay_trajectory.csv
+  # Optional explicit output CSV path. Leave empty to write under the session.
+  output_path:
+  max_force_time_delta_s: 0.05
