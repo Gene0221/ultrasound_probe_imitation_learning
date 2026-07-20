@@ -258,11 +258,28 @@ std::vector<std::string> SplitCsvLine(const std::string& line) {
   return cells;
 }
 
+std::string Trim(const std::string& text) {
+  const auto first = text.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return "";
+  }
+  const auto last = text.find_last_not_of(" \t\r\n");
+  return text.substr(first, last - first + 1);
+}
+
+std::string UnquoteCsvCell(const std::string& text) {
+  if (text.size() >= 2 && text.front() == '"' && text.back() == '"') {
+    return text.substr(1, text.size() - 2);
+  }
+  return text;
+}
+
 double ParseDouble(const std::string& text, const std::string& field_name) {
+  const std::string trimmed = UnquoteCsvCell(Trim(text));
   try {
     std::size_t parsed = 0;
-    const double value = std::stod(text, &parsed);
-    if (parsed != text.size()) {
+    const double value = std::stod(trimmed, &parsed);
+    if (parsed != trimmed.size()) {
       throw std::runtime_error("trailing characters");
     }
     return value;
