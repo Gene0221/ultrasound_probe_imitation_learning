@@ -68,6 +68,7 @@ struct Options {
   double speed_scale = 1.0;
   double max_translation_speed = 0.03;
   double max_rotation_speed = 0.35;
+  double ramp_time_s = 2.0;
   bool enable_force_correction = false;
   double force_gain = 0.0001;
   double max_force_correction = 0.002;
@@ -367,6 +368,7 @@ void PrintUsage(const char* argv0) {
       << "  --speed-scale <value>             Default: 1.0\n"
       << "  --max-translation-speed <m/s>     Default: 0.03\n"
       << "  --max-rotation-speed <rad/s>      Default: 0.35\n"
+      << "  --ramp-time <s>                   Default: 2.0\n"
       << "  --enable-force-correction         Disabled by default\n"
       << "  --force-gain <m/N>                Default: 0.0001\n"
       << "  --max-force-correction <m>        Default: 0.002\n"
@@ -396,6 +398,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.max_translation_speed = ParseDouble(require_value(arg), arg);
     } else if (arg == "--max-rotation-speed") {
       opt.max_rotation_speed = ParseDouble(require_value(arg), arg);
+    } else if (arg == "--ramp-time") {
+      opt.ramp_time_s = ParseDouble(require_value(arg), arg);
     } else if (arg == "--enable-force-correction") {
       opt.enable_force_correction = true;
     } else if (arg == "--force-gain") {
@@ -423,6 +427,15 @@ Options ParseArgs(int argc, char** argv) {
   }
   if (opt.speed_scale <= 0.0 || opt.speed_scale > 1.0) {
     throw std::runtime_error("--speed-scale must be in (0, 1].");
+  }
+  if (opt.max_translation_speed <= 0.0) {
+    throw std::runtime_error("--max-translation-speed must be positive.");
+  }
+  if (opt.max_rotation_speed <= 0.0) {
+    throw std::runtime_error("--max-rotation-speed must be positive.");
+  }
+  if (opt.ramp_time_s < 0.0) {
+    throw std::runtime_error("--ramp-time must be non-negative.");
   }
   return opt;
 }
@@ -462,12 +475,15 @@ int main(int argc, char** argv) {
     const double start_time_s = trajectory.front().time_s;
     const double end_time_s = trajectory.back().time_s;
     double elapsed_s = 0.0;
+    double control_elapsed_s = 0.0;
     std::cout << "[INFO] Replay mode: " << opt.mode << "\n";
     std::cout << "[INFO] Duration after speed scaling: " << (end_time_s - start_time_s) / opt.speed_scale << " s\n";
+    std::cout << "[INFO] Startup ramp time: " << opt.ramp_time_s << " s\n";
     std::cout << "[INFO] Press Ctrl+C to stop.\n";
 
     robot.control([&](const franka::RobotState& state, franka::Duration period) -> franka::CartesianPose {
       const double dt = period.toSec();
+      control_elapsed_s += dt;
       elapsed_s += dt * opt.speed_scale;
 
       const double trajectory_time_s = std::min(start_time_s + elapsed_s, end_time_s);
@@ -488,8 +504,9 @@ int main(int argc, char** argv) {
         target_pose.p = target_pose.p + tool_z * correction;
       }
 
-      const double max_translation_step = opt.max_translation_speed * opt.speed_scale * dt;
-      const double max_rotation_step = opt.max_rotation_speed * opt.speed_scale * dt;
+      const double ramp_factor = opt.ramp_time_s > 1e-9 ? Clamp(control_elapsed_s / opt.ramp_time_s, 0.0, 1.0) : 1.0;
+      const double max_translation_step = opt.max_translation_speed * opt.speed_scale * ramp_factor * dt;
+      const double max_rotation_step = opt.max_rotation_speed * opt.speed_scale * ramp_factor * dt;
       commanded_pose.p = LimitStep(commanded_pose.p, target_pose.p, max_translation_step);
       commanded_pose.q = LimitRotationStep(commanded_pose.q, target_pose.q, max_rotation_step);
 
