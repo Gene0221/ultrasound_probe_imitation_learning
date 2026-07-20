@@ -79,6 +79,11 @@ double Clamp(double value, double lo, double hi) {
   return std::max(lo, std::min(value, hi));
 }
 
+double Smoothstep(double value) {
+  const double x = Clamp(value, 0.0, 1.0);
+  return x * x * (3.0 - 2.0 * x);
+}
+
 Vec3 operator+(const Vec3& a, const Vec3& b) {
   return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -469,7 +474,7 @@ int main(int argc, char** argv) {
     SetConservativeCollisionBehavior(robot);
 
     const franka::RobotState initial_state = robot.readOnce();
-    const Matrix4 start_pose_matrix = ArrayToMatrix(initial_state.O_T_EE);
+    const Matrix4 start_pose_matrix = ArrayToMatrix(initial_state.O_T_EE_c);
     Pose commanded_pose = MatrixToPose(start_pose_matrix);
 
     const double start_time_s = trajectory.front().time_s;
@@ -504,7 +509,7 @@ int main(int argc, char** argv) {
         target_pose.p = target_pose.p + tool_z * correction;
       }
 
-      const double ramp_factor = opt.ramp_time_s > 1e-9 ? Clamp(control_elapsed_s / opt.ramp_time_s, 0.0, 1.0) : 1.0;
+      const double ramp_factor = opt.ramp_time_s > 1e-9 ? Smoothstep(control_elapsed_s / opt.ramp_time_s) : 1.0;
       const double max_translation_step = opt.max_translation_speed * opt.speed_scale * ramp_factor * dt;
       const double max_rotation_step = opt.max_rotation_speed * opt.speed_scale * ramp_factor * dt;
       commanded_pose.p = LimitStep(commanded_pose.p, target_pose.p, max_translation_step);

@@ -170,11 +170,28 @@ def identity() -> list[list[float]]:
     ]
 
 
+def is_identity_delta(translation: list[float], quaternion: list[float], tol: float = 1e-9) -> bool:
+    q = normalize_quaternion(quaternion)
+    return (
+        all(abs(v) <= tol for v in translation)
+        and abs(q[0]) <= tol
+        and abs(q[1]) <= tol
+        and abs(q[2]) <= tol
+        and abs(q[3] - 1.0) <= tol
+    )
+
+
 def get_timestamp(record: dict[str, Any]) -> float:
     for key in ("host_timestamp_s", "curr_host_timestamp_s", "timestamp_s"):
         if key in record:
             return float(record[key])
     raise KeyError("Pose record has no timestamp field.")
+
+
+def get_start_timestamp(record: dict[str, Any]) -> float:
+    if "prev_host_timestamp_s" in record:
+        return float(record["prev_host_timestamp_s"])
+    return get_timestamp(record)
 
 
 def get_force_value(record: dict[str, Any]) -> float:
@@ -275,20 +292,31 @@ def main() -> None:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cumulative = identity()
-    t0 = get_timestamp(pose_records[0])
+    t0 = get_start_timestamp(pose_records[0])
 
     with output_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(["time_s", "x", "y", "z", "qx", "qy", "qz", "qw", "target_fz"])
         writer.writerow([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, nearest_force(t0, force_records, force_times, max_force_time_delta_s)])
+        last_time_s = 0.0
+        skipped_duplicate_identity = 0
         for record in pose_records:
             ts = get_timestamp(record)
+            time_s = ts - t0
             translation = [float(v) for v in record["delta_translation_xyz"]]
             quaternion = [float(v) for v in record["delta_quaternion_xyzw"]]
+            if time_s <= last_time_s:
+                if is_identity_delta(translation, quaternion):
+                    skipped_duplicate_identity += 1
+                    continue
+                raise ValueError(
+                    f"Non-increasing trajectory time {time_s:.9f}s after {last_time_s:.9f}s. "
+                    "Check prev_host_timestamp_s/curr_host_timestamp_s in the pose JSONL."
+                )
             cumulative = matmul(cumulative, make_transform(translation, quaternion))
             q = matrix_to_quat(cumulative)
             writer.writerow([
-                f"{ts - t0:.6f}",
+                f"{time_s:.6f}",
                 f"{cumulative[0][3]:.9f}",
                 f"{cumulative[1][3]:.9f}",
                 f"{cumulative[2][3]:.9f}",
@@ -298,9 +326,12 @@ def main() -> None:
                 f"{q[3]:.12f}",
                 f"{nearest_force(ts, force_records, force_times, max_force_time_delta_s):.6f}",
             ])
+            last_time_s = time_s
 
     print(f"[DONE] Wrote replay CSV: {output_path}")
     print(f"[INFO] Pose records: {len(pose_records)}, force records: {len(force_records)}")
+    if skipped_duplicate_identity:
+        print(f"[INFO] Skipped duplicate identity records at non-increasing timestamps: {skipped_duplicate_identity}")
 
 
 if __name__ == "__main__":
