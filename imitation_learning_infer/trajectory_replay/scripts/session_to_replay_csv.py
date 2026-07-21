@@ -74,18 +74,15 @@ def resolve_session_file(
     return session / subdir / file_name
 
 
-def resolve_output_path(
-    *,
-    session: Path,
-    output_arg: str | None,
-    output_cfg: str | None,
-    output_subdir: str,
-    output_file: str,
-) -> Path:
-    path = resolve_path(output_arg, base=Path.cwd()) if output_arg else resolve_path(output_cfg)
-    if path is not None:
-        return path
-    return session / output_subdir / output_file
+def resolve_output_dir(output_dir_arg: str | None, output_dir_cfg: str | None) -> Path:
+    value = output_dir_arg or output_dir_cfg
+    if not value:
+        raise ValueError("No replay output directory provided. Set replay.output_dir in config or pass --output-dir.")
+    base = Path.cwd() if output_dir_arg else PROJECT_ROOT
+    output_dir = resolve_path(value, base=base)
+    if output_dir is None:
+        raise ValueError("Replay output directory resolved to None.")
+    return output_dir
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -368,7 +365,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Session directory containing transformed_pose/ and predicted_force/. Overrides paths.session in config.",
     )
-    parser.add_argument("--output", default=None, help="Output CSV path. Overrides replay.output_path in config.")
+    parser.add_argument("--output-dir", default=None, help="Directory for replay CSV files. Overrides replay.output_dir in config.")
     parser.add_argument("--pose-file", default=None, help="Pose JSONL path. Overrides input.pose_file in config.")
     parser.add_argument("--force-file", default=None, help="Force JSONL path. Overrides input.force_file in config.")
     parser.add_argument(
@@ -402,13 +399,9 @@ def main() -> None:
         subdir=str(session_layout.get("force_subdir", "predicted_force")),
         file_name=str(session_layout.get("force_file", "predicted_force.jsonl")),
     )
-    output_path = resolve_output_path(
-        session=session,
-        output_arg=args.output,
-        output_cfg=config_get(config, "replay", "output_path"),
-        output_subdir=str(replay_cfg.get("output_subdir", "franka_replay")),
-        output_file=str(replay_cfg.get("output_file", "replay_trajectory.csv")),
-    )
+    output_dir = resolve_output_dir(args.output_dir, config_get(config, "replay", "output_dir"))
+    output_path = output_dir / str(replay_cfg.get("output_file", "replay_trajectory.csv"))
+    raw_output_path = output_dir / str(replay_cfg.get("raw_output_file", "replay_trajectory_raw.csv"))
     max_force_time_delta_s = (
         args.max_force_time_delta_s
         if args.max_force_time_delta_s is not None
@@ -418,6 +411,7 @@ def main() -> None:
     print(f"[INFO] Session: {session}")
     print(f"[INFO] Pose input: {pose_path}")
     print(f"[INFO] Force input: {force_path}")
+    print(f"[INFO] Replay output dir: {output_dir}")
     print(f"[INFO] Replay output: {output_path}")
 
     pose_records = load_jsonl(pose_path)
@@ -475,7 +469,6 @@ def main() -> None:
         last_time_s = time_s
 
     if bool(replay_cfg.get("write_raw_copy", True)):
-        raw_output_path = output_path.parent / str(replay_cfg.get("raw_output_file", "replay_trajectory_raw.csv"))
         write_replay_csv(raw_output_path, raw_rows)
         print(f"[INFO] Wrote raw replay CSV: {raw_output_path}")
 

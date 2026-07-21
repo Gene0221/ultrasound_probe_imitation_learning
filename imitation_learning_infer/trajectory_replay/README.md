@@ -128,17 +128,23 @@ By default the converter reads:
 <session>/predicted_force/predicted_force.jsonl
 ```
 
-and writes:
+and writes the generated replay files to `replay.output_dir`:
 
 ```text
-<session>/franka_replay/replay_trajectory.csv
+config/replay_trajectory.csv
+config/replay_trajectory_raw.csv
 ```
 
-By default the converter also writes the unfiltered trajectory to:
+To write replay files into this workspace instead of the data session, set:
 
-```text
-<session>/franka_replay/replay_trajectory_raw.csv
+```yaml
+replay:
+  output_dir: ./config
+  output_file: replay_trajectory.csv
 ```
+
+Relative `output_dir` paths are resolved from `trajectory_replay/`, so this
+writes `config/replay_trajectory.csv`.
 
 `replay_trajectory.csv` is smoothed and resampled by default. This is recommended
 for Franka replay because raw sampled pose trajectories can contain small
@@ -162,5 +168,5 @@ These directory and file names are configurable under `session_layout` and
 
 ```bash
 python scripts/session_to_replay_csv.py --session /path/to/session_0001
-python scripts/session_to_replay_csv.py --pose-file /path/to/flange_pose_deltas.jsonl --force-file /path/to/predicted_force.jsonl --output /path/to/replay_trajectory.csv
+python scripts/session_to_replay_csv.py --pose-file /path/to/flange_pose_deltas.jsonl --force-file /path/to/predicted_force.jsonl --output-dir ./config
 ```

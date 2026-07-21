@@ -16,12 +16,12 @@ session_layout:
   force_file: predicted_force.jsonl
 
 replay:
-  output_subdir: franka_replay
+  # Parent directory for generated replay CSV files.
+  # Relative paths are resolved from trajectory_replay/.
+  output_dir: ./config
   output_file: replay_trajectory.csv
   raw_output_file: replay_trajectory_raw.csv
   write_raw_copy: true
-  # Optional explicit output CSV path. Leave empty to write under the session.
-  output_path: ./config/
   max_force_time_delta_s: 0.05
 
 smoothing:
