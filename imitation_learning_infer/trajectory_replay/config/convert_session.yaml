@@ -23,3 +23,10 @@ replay:
   raw_output_file: replay_trajectory_raw.csv
   write_raw_copy: true
   max_force_time_delta_s: 0.05
+
+filter:
+  # Applied to cumulative x/y/z before writing replay.output_file.
+  # replay.raw_output_file keeps the unfiltered trajectory.
+  enabled: true
+  cutoff_hz: 1.0
+  zero_phase: true

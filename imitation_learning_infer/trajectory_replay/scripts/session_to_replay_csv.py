@@ -218,6 +218,48 @@ def nearest_force(timestamp: float, force_records: list[dict[str, Any]], force_t
     return get_force_value(force_records[best])
 
 
+def lowpass_series(times: list[float], values: list[float], cutoff_hz: float) -> list[float]:
+    if cutoff_hz <= 0.0:
+        raise ValueError("filter.cutoff_hz must be positive.")
+    if not values:
+        return []
+    tau = 1.0 / (2.0 * math.pi * cutoff_hz)
+    filtered = [values[0]]
+    for idx in range(1, len(values)):
+        dt = max(times[idx] - times[idx - 1], 1e-9)
+        alpha = dt / (tau + dt)
+        filtered.append(filtered[-1] + alpha * (values[idx] - filtered[-1]))
+    return filtered
+
+
+def lowpass_zero_phase(times: list[float], values: list[float], cutoff_hz: float) -> list[float]:
+    forward = lowpass_series(times, values, cutoff_hz)
+    reversed_times = [times[-1] - t for t in reversed(times)]
+    backward = list(reversed(lowpass_series(reversed_times, list(reversed(forward)), cutoff_hz)))
+    backward[0] = values[0]
+    backward[-1] = values[-1]
+    return backward
+
+
+def apply_position_lowpass(rows: list[dict[str, float]], filter_cfg: dict[str, Any]) -> list[dict[str, float]]:
+    if not bool(filter_cfg.get("enabled", False)):
+        return rows
+    cutoff_hz = float(filter_cfg.get("cutoff_hz", 1.0))
+    zero_phase = bool(filter_cfg.get("zero_phase", True))
+    times = [row["time_s"] for row in rows]
+    output = [dict(row) for row in rows]
+    for key in ("x", "y", "z"):
+        values = [row[key] for row in rows]
+        filtered = (
+            lowpass_zero_phase(times, values, cutoff_hz)
+            if zero_phase
+            else lowpass_series(times, values, cutoff_hz)
+        )
+        for row, value in zip(output, filtered):
+            row[key] = value
+    return output
+
+
 def write_replay_csv(path: Path, rows: list[dict[str, float]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -266,6 +308,7 @@ def main() -> None:
     config = load_config(args.config)
     session_layout = config.get("session_layout", {})
     replay_cfg = config.get("replay", {})
+    filter_cfg = config.get("filter", {})
 
     session = resolve_session(config, args.session)
     pose_path = resolve_session_file(
@@ -355,11 +398,13 @@ def main() -> None:
         write_replay_csv(raw_output_path, raw_rows)
         print(f"[INFO] Wrote raw replay CSV: {raw_output_path}")
 
-    output_rows = raw_rows
+    output_rows = apply_position_lowpass(raw_rows, filter_cfg)
     write_replay_csv(output_path, output_rows)
 
     print(f"[DONE] Wrote replay CSV: {output_path}")
     print(f"[INFO] Output rows: {len(output_rows)} (raw rows: {len(raw_rows)})")
+    if filter_cfg.get("enabled", False):
+        print(f"[INFO] Position low-pass filter enabled: {filter_cfg}")
     print(f"[INFO] Pose records: {len(pose_records)}, force records: {len(force_records)}")
     if skipped_duplicate_identity:
         print(f"[INFO] Skipped duplicate identity records at non-increasing timestamps: {skipped_duplicate_identity}")

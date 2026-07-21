@@ -146,10 +146,21 @@ replay:
 Relative `output_dir` paths are resolved from `trajectory_replay/`, so this
 writes `config/replay_trajectory.csv`.
 
-The converter does not smooth or resample the trajectory. It only accumulates
-the processed pose deltas into a start-relative CSV. Runtime smoothing is handled
-by `replay_trajectory`, which evaluates a quintic time-scaling interpolation in
-the 1 kHz Franka callback.
+The converter accumulates the processed pose deltas into a start-relative CSV.
+By default it applies a zero-phase first-order low-pass filter to cumulative
+`x/y/z` before writing `replay_trajectory.csv`; `replay_trajectory_raw.csv`
+keeps the unfiltered trajectory. It does not resample timestamps. Runtime
+interpolation is handled by `replay_trajectory`, which evaluates a quintic
+time-scaling interpolation in the 1 kHz Franka callback.
+
+Tune the output filter in [config/convert_session.yaml](config/convert_session.yaml):
+
+```yaml
+filter:
+  enabled: true
+  cutoff_hz: 1.0
+  zero_phase: true
+```
 
 These directory and file names are configurable under `session_layout` and
 `replay`. For one-off runs, command-line arguments still override the config:
