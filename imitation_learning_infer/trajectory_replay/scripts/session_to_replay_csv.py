@@ -304,21 +304,60 @@ def smooth_positions(rows: list[dict[str, float]], window: int) -> None:
     rows[-1]["x"], rows[-1]["y"], rows[-1]["z"] = original[-1]
 
 
+def row_quaternion(row: dict[str, float]) -> list[float]:
+    return [row["qx"], row["qy"], row["qz"], row["qw"]]
+
+
+def set_row_quaternion(row: dict[str, float], q: list[float]) -> None:
+    q = normalize_quaternion(q)
+    row["qx"], row["qy"], row["qz"], row["qw"] = q
+
+
+def quat_angle(a: list[float], b: list[float]) -> float:
+    dot = abs(quat_dot(normalize_quaternion(a), normalize_quaternion(b)))
+    return 2.0 * math.acos(max(-1.0, min(1.0, dot)))
+
+
 def smooth_orientations(rows: list[dict[str, float]], alpha: float, *, fixed_orientation: bool) -> None:
     if fixed_orientation:
-        first = [rows[0]["qx"], rows[0]["qy"], rows[0]["qz"], rows[0]["qw"]]
+        first = row_quaternion(rows[0])
         for row in rows:
-            row["qx"], row["qy"], row["qz"], row["qw"] = first
+            set_row_quaternion(row, first)
         return
     if alpha >= 1.0:
         return
     if alpha <= 0.0:
         raise ValueError("smoothing.orientation_alpha must be in (0, 1].")
-    filtered = [rows[0]["qx"], rows[0]["qy"], rows[0]["qz"], rows[0]["qw"]]
+    filtered = row_quaternion(rows[0])
     for row in rows[1:]:
-        target = [row["qx"], row["qy"], row["qz"], row["qw"]]
+        target = row_quaternion(row)
         filtered = quat_slerp(filtered, target, alpha)
-        row["qx"], row["qy"], row["qz"], row["qw"] = filtered
+        set_row_quaternion(row, filtered)
+
+
+
+def limit_orientation_speed(rows: list[dict[str, float]], max_speed_rad_s: float | None) -> None:
+    if max_speed_rad_s is None or max_speed_rad_s <= 0.0:
+        return
+    previous = row_quaternion(rows[0])
+    previous_time_s = rows[0]["time_s"]
+    set_row_quaternion(rows[0], previous)
+    for row in rows[1:]:
+        current_time_s = row["time_s"]
+        dt = current_time_s - previous_time_s
+        if dt <= 0.0:
+            set_row_quaternion(row, previous)
+            continue
+        target = row_quaternion(row)
+        angle = quat_angle(previous, target)
+        max_angle = max_speed_rad_s * dt
+        if angle > max_angle and angle > 1e-12:
+            limited = quat_slerp(previous, target, max_angle / angle)
+        else:
+            limited = target
+        set_row_quaternion(row, limited)
+        previous = limited
+        previous_time_s = current_time_s
 
 
 def apply_smoothing(rows: list[dict[str, float]], smoothing_cfg: dict[str, Any]) -> list[dict[str, float]]:
@@ -330,6 +369,11 @@ def apply_smoothing(rows: list[dict[str, float]], smoothing_cfg: dict[str, Any])
         smoothed,
         float(smoothing_cfg.get("orientation_alpha", 0.15)),
         fixed_orientation=bool(smoothing_cfg.get("fixed_orientation", False)),
+    )
+    max_orientation_speed = smoothing_cfg.get("max_orientation_speed_rad_s")
+    limit_orientation_speed(
+        smoothed,
+        None if max_orientation_speed in (None, "") else float(max_orientation_speed),
     )
     return smoothed
 
@@ -486,3 +530,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
