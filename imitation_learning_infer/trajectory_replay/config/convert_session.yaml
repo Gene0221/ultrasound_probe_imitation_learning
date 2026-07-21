@@ -2,7 +2,7 @@ paths:
   # Processed session directory produced by data_collection/imitation_learning_preprocessing.
   # Absolute Windows paths are supported, for example:
   # session: E:/research_data/rotate/output/session_0001
-  session: E:/research_data/rotate/output/session_0001
+  session: /media/scupi-r/KESU1/research_data/rotate/output/session_0008
 
 input:
   # Optional explicit input files. Leave empty to use session_layout below.
@@ -18,6 +18,18 @@ session_layout:
 replay:
   output_subdir: franka_replay
   output_file: replay_trajectory.csv
+  raw_output_file: replay_trajectory_raw.csv
+  write_raw_copy: true
   # Optional explicit output CSV path. Leave empty to write under the session.
-  output_path:
+  output_path: ./config/
   max_force_time_delta_s: 0.05
+
+smoothing:
+  # Recommended for Franka replay: raw sampled trajectories can contain
+  # high-frequency pose jitter that triggers acceleration discontinuity reflexes.
+  enabled: true
+  resample_dt_s: 0.02
+  position_window: 9
+  orientation_alpha: 0.15
+  # Set true for the safest first translation-only replay test.
+  fixed_orientation: false

@@ -109,6 +109,27 @@ def normalize_quaternion(q: list[float]) -> list[float]:
     return [v / n for v in q]
 
 
+def quat_dot(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))
+
+
+def quat_slerp(a: list[float], b: list[float], t: float) -> list[float]:
+    a = normalize_quaternion(a)
+    b = normalize_quaternion(b)
+    cos_theta = quat_dot(a, b)
+    if cos_theta < 0.0:
+        b = [-v for v in b]
+        cos_theta = -cos_theta
+    cos_theta = max(-1.0, min(1.0, cos_theta))
+    if cos_theta > 0.9995:
+        return normalize_quaternion([a[i] + t * (b[i] - a[i]) for i in range(4)])
+    theta = math.acos(cos_theta)
+    sin_theta = math.sin(theta)
+    w1 = math.sin((1.0 - t) * theta) / sin_theta
+    w2 = math.sin(t * theta) / sin_theta
+    return normalize_quaternion([w1 * a[i] + w2 * b[i] for i in range(4)])
+
+
 def quat_to_matrix(q: list[float]) -> list[list[float]]:
     x, y, z, w = normalize_quaternion(q)
     xx, yy, zz = x * x, y * y, z * z
@@ -221,6 +242,120 @@ def nearest_force(timestamp: float, force_records: list[dict[str, Any]], force_t
     return get_force_value(force_records[best])
 
 
+def lerp(a: float, b: float, t: float) -> float:
+    return a + t * (b - a)
+
+
+def interpolate_rows(rows: list[dict[str, float]], time_s: float) -> dict[str, float]:
+    if time_s <= rows[0]["time_s"]:
+        return dict(rows[0])
+    if time_s >= rows[-1]["time_s"]:
+        out = dict(rows[-1])
+        out["time_s"] = time_s
+        return out
+
+    times = [row["time_s"] for row in rows]
+    pos = bisect_left(times, time_s)
+    a = rows[pos - 1]
+    b = rows[pos]
+    alpha = (time_s - a["time_s"]) / (b["time_s"] - a["time_s"])
+    q = quat_slerp([a["qx"], a["qy"], a["qz"], a["qw"]], [b["qx"], b["qy"], b["qz"], b["qw"]], alpha)
+    return {
+        "time_s": time_s,
+        "x": lerp(a["x"], b["x"], alpha),
+        "y": lerp(a["y"], b["y"], alpha),
+        "z": lerp(a["z"], b["z"], alpha),
+        "qx": q[0],
+        "qy": q[1],
+        "qz": q[2],
+        "qw": q[3],
+        "target_fz": lerp(a["target_fz"], b["target_fz"], alpha),
+    }
+
+
+def resample_rows(rows: list[dict[str, float]], dt_s: float) -> list[dict[str, float]]:
+    if dt_s <= 0.0:
+        raise ValueError("smoothing.resample_dt_s must be positive.")
+    end_time_s = rows[-1]["time_s"]
+    out: list[dict[str, float]] = []
+    idx = 0
+    while True:
+        t = idx * dt_s
+        if t >= end_time_s:
+            break
+        out.append(interpolate_rows(rows, t))
+        idx += 1
+    out.append(interpolate_rows(rows, end_time_s))
+    return out
+
+
+def smooth_positions(rows: list[dict[str, float]], window: int) -> None:
+    if window <= 1:
+        return
+    if window % 2 == 0:
+        raise ValueError("smoothing.position_window must be odd.")
+    half = window // 2
+    original = [(row["x"], row["y"], row["z"]) for row in rows]
+    for idx, row in enumerate(rows):
+        lo = max(0, idx - half)
+        hi = min(len(rows), idx + half + 1)
+        count = hi - lo
+        row["x"] = sum(original[j][0] for j in range(lo, hi)) / count
+        row["y"] = sum(original[j][1] for j in range(lo, hi)) / count
+        row["z"] = sum(original[j][2] for j in range(lo, hi)) / count
+    rows[0]["x"], rows[0]["y"], rows[0]["z"] = original[0]
+    rows[-1]["x"], rows[-1]["y"], rows[-1]["z"] = original[-1]
+
+
+def smooth_orientations(rows: list[dict[str, float]], alpha: float, *, fixed_orientation: bool) -> None:
+    if fixed_orientation:
+        first = [rows[0]["qx"], rows[0]["qy"], rows[0]["qz"], rows[0]["qw"]]
+        for row in rows:
+            row["qx"], row["qy"], row["qz"], row["qw"] = first
+        return
+    if alpha >= 1.0:
+        return
+    if alpha <= 0.0:
+        raise ValueError("smoothing.orientation_alpha must be in (0, 1].")
+    filtered = [rows[0]["qx"], rows[0]["qy"], rows[0]["qz"], rows[0]["qw"]]
+    for row in rows[1:]:
+        target = [row["qx"], row["qy"], row["qz"], row["qw"]]
+        filtered = quat_slerp(filtered, target, alpha)
+        row["qx"], row["qy"], row["qz"], row["qw"] = filtered
+
+
+def apply_smoothing(rows: list[dict[str, float]], smoothing_cfg: dict[str, Any]) -> list[dict[str, float]]:
+    if not bool(smoothing_cfg.get("enabled", False)):
+        return rows
+    smoothed = resample_rows(rows, float(smoothing_cfg.get("resample_dt_s", 0.02)))
+    smooth_positions(smoothed, int(smoothing_cfg.get("position_window", 9)))
+    smooth_orientations(
+        smoothed,
+        float(smoothing_cfg.get("orientation_alpha", 0.15)),
+        fixed_orientation=bool(smoothing_cfg.get("fixed_orientation", False)),
+    )
+    return smoothed
+
+
+def write_replay_csv(path: Path, rows: list[dict[str, float]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["time_s", "x", "y", "z", "qx", "qy", "qz", "qw", "target_fz"])
+        for row in rows:
+            writer.writerow([
+                f"{row['time_s']:.6f}",
+                f"{row['x']:.9f}",
+                f"{row['y']:.9f}",
+                f"{row['z']:.9f}",
+                f"{row['qx']:.12f}",
+                f"{row['qy']:.12f}",
+                f"{row['qz']:.12f}",
+                f"{row['qw']:.12f}",
+                f"{row['target_fz']:.6f}",
+            ])
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert processed session JSONL files into Franka replay CSV.")
     parser.add_argument(
@@ -250,6 +385,7 @@ def main() -> None:
     config = load_config(args.config)
     session_layout = config.get("session_layout", {})
     replay_cfg = config.get("replay", {})
+    smoothing_cfg = config.get("smoothing", {})
 
     session = resolve_session(config, args.session)
     pose_path = resolve_session_file(
@@ -290,45 +426,66 @@ def main() -> None:
     if not pose_records:
         raise ValueError(f"No pose records found in {pose_path}")
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
     cumulative = identity()
     t0 = get_start_timestamp(pose_records[0])
+    raw_rows: list[dict[str, float]] = [
+        {
+            "time_s": 0.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "qx": 0.0,
+            "qy": 0.0,
+            "qz": 0.0,
+            "qw": 1.0,
+            "target_fz": nearest_force(t0, force_records, force_times, max_force_time_delta_s),
+        }
+    ]
+    last_time_s = 0.0
+    skipped_duplicate_identity = 0
 
-    with output_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(["time_s", "x", "y", "z", "qx", "qy", "qz", "qw", "target_fz"])
-        writer.writerow([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, nearest_force(t0, force_records, force_times, max_force_time_delta_s)])
-        last_time_s = 0.0
-        skipped_duplicate_identity = 0
-        for record in pose_records:
-            ts = get_timestamp(record)
-            time_s = ts - t0
-            translation = [float(v) for v in record["delta_translation_xyz"]]
-            quaternion = [float(v) for v in record["delta_quaternion_xyzw"]]
-            if time_s <= last_time_s:
-                if is_identity_delta(translation, quaternion):
-                    skipped_duplicate_identity += 1
-                    continue
-                raise ValueError(
-                    f"Non-increasing trajectory time {time_s:.9f}s after {last_time_s:.9f}s. "
-                    "Check prev_host_timestamp_s/curr_host_timestamp_s in the pose JSONL."
-                )
-            cumulative = matmul(cumulative, make_transform(translation, quaternion))
-            q = matrix_to_quat(cumulative)
-            writer.writerow([
-                f"{time_s:.6f}",
-                f"{cumulative[0][3]:.9f}",
-                f"{cumulative[1][3]:.9f}",
-                f"{cumulative[2][3]:.9f}",
-                f"{q[0]:.12f}",
-                f"{q[1]:.12f}",
-                f"{q[2]:.12f}",
-                f"{q[3]:.12f}",
-                f"{nearest_force(ts, force_records, force_times, max_force_time_delta_s):.6f}",
-            ])
-            last_time_s = time_s
+    for record in pose_records:
+        ts = get_timestamp(record)
+        time_s = ts - t0
+        translation = [float(v) for v in record["delta_translation_xyz"]]
+        quaternion = [float(v) for v in record["delta_quaternion_xyzw"]]
+        if time_s <= last_time_s:
+            if is_identity_delta(translation, quaternion):
+                skipped_duplicate_identity += 1
+                continue
+            raise ValueError(
+                f"Non-increasing trajectory time {time_s:.9f}s after {last_time_s:.9f}s. "
+                "Check prev_host_timestamp_s/curr_host_timestamp_s in the pose JSONL."
+            )
+        cumulative = matmul(cumulative, make_transform(translation, quaternion))
+        q = matrix_to_quat(cumulative)
+        raw_rows.append(
+            {
+                "time_s": time_s,
+                "x": cumulative[0][3],
+                "y": cumulative[1][3],
+                "z": cumulative[2][3],
+                "qx": q[0],
+                "qy": q[1],
+                "qz": q[2],
+                "qw": q[3],
+                "target_fz": nearest_force(ts, force_records, force_times, max_force_time_delta_s),
+            }
+        )
+        last_time_s = time_s
+
+    if bool(replay_cfg.get("write_raw_copy", True)):
+        raw_output_path = output_path.parent / str(replay_cfg.get("raw_output_file", "replay_trajectory_raw.csv"))
+        write_replay_csv(raw_output_path, raw_rows)
+        print(f"[INFO] Wrote raw replay CSV: {raw_output_path}")
+
+    output_rows = apply_smoothing(raw_rows, smoothing_cfg)
+    write_replay_csv(output_path, output_rows)
 
     print(f"[DONE] Wrote replay CSV: {output_path}")
+    print(f"[INFO] Output rows: {len(output_rows)} (raw rows: {len(raw_rows)})")
+    if smoothing_cfg.get("enabled", False):
+        print(f"[INFO] Smoothing enabled: {smoothing_cfg}")
     print(f"[INFO] Pose records: {len(pose_records)}, force records: {len(force_records)}")
     if skipped_duplicate_identity:
         print(f"[INFO] Skipped duplicate identity records at non-increasing timestamps: {skipped_duplicate_identity}")
