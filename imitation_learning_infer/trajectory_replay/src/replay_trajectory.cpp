@@ -69,6 +69,7 @@ struct Options {
   double max_translation_speed = 0.03;
   double max_translation_acceleration = 0.01;
   double max_rotation_speed = 0.35;
+  double max_rotation_acceleration = 0.1;
   double ramp_time_s = 2.0;
   bool hold_at_end = false;
   bool enable_force_correction = false;
@@ -138,6 +139,19 @@ Quaternion Normalize(const Quaternion& q) {
   return Quaternion{q.x / n, q.y / n, q.z / n, q.w / n};
 }
 
+Quaternion Conjugate(const Quaternion& q) {
+  return Quaternion{-q.x, -q.y, -q.z, q.w};
+}
+
+Quaternion Multiply(const Quaternion& a, const Quaternion& b) {
+  return Normalize(Quaternion{
+      a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+      a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+      a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+      a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  });
+}
+
 double Dot(const Quaternion& a, const Quaternion& b) {
   return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
@@ -177,12 +191,29 @@ double QuaternionAngle(const Quaternion& a, const Quaternion& b) {
   return 2.0 * std::acos(Clamp(cos_theta, -1.0, 1.0));
 }
 
-Quaternion LimitRotationStep(const Quaternion& current, const Quaternion& target, double max_angle_step) {
-  const double angle = QuaternionAngle(current, target);
-  if (angle <= max_angle_step || angle < 1e-12) {
-    return Normalize(target);
+Vec3 QuaternionToRotationVector(Quaternion q) {
+  q = Normalize(q);
+  if (q.w < 0.0) {
+    q = Quaternion{-q.x, -q.y, -q.z, -q.w};
   }
-  return Slerp(current, target, max_angle_step / angle);
+  const double vector_norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z);
+  if (vector_norm < 1e-12) {
+    return Vec3{0.0, 0.0, 0.0};
+  }
+  const double angle = 2.0 * std::atan2(vector_norm, Clamp(q.w, -1.0, 1.0));
+  const double scale = angle / vector_norm;
+  return Vec3{q.x * scale, q.y * scale, q.z * scale};
+}
+
+Quaternion RotationVectorToQuaternion(const Vec3& rotvec) {
+  const double angle = Norm(rotvec);
+  if (angle < 1e-12) {
+    return Quaternion{0.0, 0.0, 0.0, 1.0};
+  }
+  const Vec3 axis = rotvec / angle;
+  const double half = 0.5 * angle;
+  const double s = std::sin(half);
+  return Normalize(Quaternion{axis.x * s, axis.y * s, axis.z * s, std::cos(half)});
 }
 
 Matrix4 Identity() {
@@ -396,6 +427,7 @@ void PrintUsage(const char* argv0) {
       << "  --max-translation-speed <m/s>     Default: 0.03\n"
       << "  --max-translation-acceleration <m/s^2>  Default: 0.01\n"
       << "  --max-rotation-speed <rad/s>      Default: 0.35\n"
+      << "  --max-rotation-acceleration <rad/s^2>  Default: 0.1\n"
       << "  --ramp-time <s>                   Default: 2.0\n"
       << "  --hold-at-end                     Keep commanding the final pose instead of exiting\n"
       << "  --enable-force-correction         Disabled by default\n"
@@ -429,6 +461,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.max_translation_acceleration = ParseDouble(require_value(arg), arg);
     } else if (arg == "--max-rotation-speed") {
       opt.max_rotation_speed = ParseDouble(require_value(arg), arg);
+    } else if (arg == "--max-rotation-acceleration") {
+      opt.max_rotation_acceleration = ParseDouble(require_value(arg), arg);
     } else if (arg == "--ramp-time") {
       opt.ramp_time_s = ParseDouble(require_value(arg), arg);
     } else if (arg == "--hold-at-end") {
@@ -470,6 +504,9 @@ Options ParseArgs(int argc, char** argv) {
   if (opt.max_rotation_speed <= 0.0) {
     throw std::runtime_error("--max-rotation-speed must be positive.");
   }
+  if (opt.max_rotation_acceleration <= 0.0) {
+    throw std::runtime_error("--max-rotation-acceleration must be positive.");
+  }
   if (opt.ramp_time_s < 0.0) {
     throw std::runtime_error("--ramp-time must be non-negative.");
   }
@@ -508,6 +545,7 @@ int main(int argc, char** argv) {
     const Matrix4 start_pose_matrix = ArrayToMatrix(initial_state.O_T_EE_c);
     Pose commanded_pose = MatrixToPose(start_pose_matrix);
     Vec3 commanded_velocity{0.0, 0.0, 0.0};
+    Vec3 commanded_angular_velocity{0.0, 0.0, 0.0};
 
     const double start_time_s = trajectory.front().time_s;
     const double end_time_s = trajectory.back().time_s;
@@ -547,7 +585,8 @@ int main(int argc, char** argv) {
       const double ramp_factor = opt.ramp_time_s > 1e-9 ? Smoothstep(control_elapsed_s / opt.ramp_time_s) : 1.0;
       const double max_translation_speed = opt.max_translation_speed * opt.speed_scale * ramp_factor;
       const double max_translation_acceleration = opt.max_translation_acceleration * opt.speed_scale;
-      const double max_rotation_step = opt.max_rotation_speed * opt.speed_scale * ramp_factor * dt;
+      const double max_rotation_speed = opt.max_rotation_speed * opt.speed_scale * ramp_factor;
+      const double max_rotation_acceleration = opt.max_rotation_acceleration * opt.speed_scale;
 
       const Vec3 translation_error = target_pose.p - commanded_pose.p;
       const double translation_error_norm = Norm(translation_error);
@@ -568,7 +607,28 @@ int main(int argc, char** argv) {
       } else {
         commanded_pose.p = commanded_pose.p + translation_step;
       }
-      commanded_pose.q = LimitRotationStep(commanded_pose.q, target_pose.q, max_rotation_step);
+      Quaternion rotation_error_q = Multiply(target_pose.q, Conjugate(commanded_pose.q));
+      Vec3 rotation_error = QuaternionToRotationVector(rotation_error_q);
+      const double rotation_error_norm = Norm(rotation_error);
+      const double stopping_angular_speed = std::sqrt(2.0 * max_rotation_acceleration * rotation_error_norm);
+      const double desired_angular_speed_limit = std::min(max_rotation_speed, stopping_angular_speed);
+      const Vec3 desired_angular_velocity = LimitVectorNorm(
+          rotation_error / std::max(dt, 1e-9),
+          desired_angular_speed_limit);
+      const Vec3 angular_velocity_delta = LimitVectorNorm(
+          desired_angular_velocity - commanded_angular_velocity,
+          max_rotation_acceleration * dt);
+      commanded_angular_velocity = LimitVectorNorm(
+          commanded_angular_velocity + angular_velocity_delta,
+          max_rotation_speed);
+
+      if (rotation_error_norm < 1e-7 && Norm(commanded_angular_velocity) < 1e-5) {
+        commanded_pose.q = Normalize(target_pose.q);
+        commanded_angular_velocity = Vec3{0.0, 0.0, 0.0};
+      } else {
+        const Quaternion rotation_step = RotationVectorToQuaternion(commanded_angular_velocity * dt);
+        commanded_pose.q = Multiply(rotation_step, commanded_pose.q);
+      }
 
       const Matrix4 command_matrix = PoseToMatrix(commanded_pose);
 
@@ -577,14 +637,15 @@ int main(int argc, char** argv) {
           Norm(target_pose.p - commanded_pose.p) < 1e-5 &&
           QuaternionAngle(target_pose.q, commanded_pose.q) < 1e-4;
       const bool command_stopped = Norm(commanded_velocity) < 1e-5;
+      const bool rotation_stopped = Norm(commanded_angular_velocity) < 1e-5;
 
-      if (trajectory_time_done && command_reached && command_stopped) {
+      if (trajectory_time_done && command_reached && command_stopped && rotation_stopped) {
         finish_settle_elapsed_s += dt;
       } else {
         finish_settle_elapsed_s = 0.0;
       }
 
-      if (stop_requested && command_stopped) {
+      if (stop_requested && command_stopped && rotation_stopped) {
         return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
       }
 

@@ -106,6 +106,44 @@ def normalize_quaternion(q: list[float]) -> list[float]:
     return [v / n for v in q]
 
 
+def quat_conjugate(q: list[float]) -> list[float]:
+    x, y, z, w = q
+    return [-x, -y, -z, w]
+
+
+def quat_multiply(a: list[float], b: list[float]) -> list[float]:
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    return normalize_quaternion([
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+        aw * bw - ax * bx - ay * by - az * bz,
+    ])
+
+
+def quat_to_rotvec(q: list[float]) -> list[float]:
+    x, y, z, w = normalize_quaternion(q)
+    if w < 0.0:
+        x, y, z, w = -x, -y, -z, -w
+    vector_norm = math.sqrt(x * x + y * y + z * z)
+    if vector_norm < 1e-12:
+        return [0.0, 0.0, 0.0]
+    angle = 2.0 * math.atan2(vector_norm, max(-1.0, min(1.0, w)))
+    scale = angle / vector_norm
+    return [x * scale, y * scale, z * scale]
+
+
+def rotvec_to_quat(rotvec: list[float]) -> list[float]:
+    angle = math.sqrt(sum(v * v for v in rotvec))
+    if angle < 1e-12:
+        return [0.0, 0.0, 0.0, 1.0]
+    axis = [v / angle for v in rotvec]
+    half = 0.5 * angle
+    s = math.sin(half)
+    return normalize_quaternion([axis[0] * s, axis[1] * s, axis[2] * s, math.cos(half)])
+
+
 def quat_to_matrix(q: list[float]) -> list[list[float]]:
     x, y, z, w = normalize_quaternion(q)
     xx, yy, zz = x * x, y * y, z * z
@@ -260,6 +298,48 @@ def apply_position_lowpass(rows: list[dict[str, float]], filter_cfg: dict[str, A
     return output
 
 
+def apply_orientation_lowpass(rows: list[dict[str, float]], filter_cfg: dict[str, Any]) -> list[dict[str, float]]:
+    if not bool(filter_cfg.get("orientation_enabled", filter_cfg.get("enabled", False))):
+        return rows
+    cutoff_hz = float(filter_cfg.get("orientation_cutoff_hz", filter_cfg.get("cutoff_hz", 1.0)))
+    zero_phase = bool(filter_cfg.get("zero_phase", True))
+    times = [row["time_s"] for row in rows]
+    output = [dict(row) for row in rows]
+    q0 = normalize_quaternion([rows[0]["qx"], rows[0]["qy"], rows[0]["qz"], rows[0]["qw"]])
+
+    rotvecs: list[list[float]] = []
+    previous_q = q0
+    for row in rows:
+        q = normalize_quaternion([row["qx"], row["qy"], row["qz"], row["qw"]])
+        if sum(a * b for a, b in zip(q, previous_q)) < 0.0:
+            q = [-v for v in q]
+        relative_q = quat_multiply(quat_conjugate(q0), q)
+        rotvecs.append(quat_to_rotvec(relative_q))
+        previous_q = q
+
+    filtered_axes: list[list[float]] = []
+    for axis in range(3):
+        values = [rotvec[axis] for rotvec in rotvecs]
+        filtered = (
+            lowpass_zero_phase(times, values, cutoff_hz)
+            if zero_phase
+            else lowpass_series(times, values, cutoff_hz)
+        )
+        filtered_axes.append(filtered)
+
+    for idx, row in enumerate(output):
+        filtered_rotvec = [filtered_axes[axis][idx] for axis in range(3)]
+        filtered_q = quat_multiply(q0, rotvec_to_quat(filtered_rotvec))
+        row["qx"], row["qy"], row["qz"], row["qw"] = filtered_q
+    return output
+
+
+def apply_replay_filter(rows: list[dict[str, float]], filter_cfg: dict[str, Any]) -> list[dict[str, float]]:
+    output = apply_position_lowpass(rows, filter_cfg)
+    output = apply_orientation_lowpass(output, filter_cfg)
+    return output
+
+
 def write_replay_csv(path: Path, rows: list[dict[str, float]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -398,13 +478,13 @@ def main() -> None:
         write_replay_csv(raw_output_path, raw_rows)
         print(f"[INFO] Wrote raw replay CSV: {raw_output_path}")
 
-    output_rows = apply_position_lowpass(raw_rows, filter_cfg)
+    output_rows = apply_replay_filter(raw_rows, filter_cfg)
     write_replay_csv(output_path, output_rows)
 
     print(f"[DONE] Wrote replay CSV: {output_path}")
     print(f"[INFO] Output rows: {len(output_rows)} (raw rows: {len(raw_rows)})")
     if filter_cfg.get("enabled", False):
-        print(f"[INFO] Position low-pass filter enabled: {filter_cfg}")
+        print(f"[INFO] Replay low-pass filter enabled: {filter_cfg}")
     print(f"[INFO] Pose records: {len(pose_records)}, force records: {len(force_records)}")
     if skipped_duplicate_identity:
         print(f"[INFO] Skipped duplicate identity records at non-increasing timestamps: {skipped_duplicate_identity}")

@@ -16,6 +16,7 @@ Options:
   --max-translation-speed <m/s>   Max Cartesian translation speed. Default: 0.03, or MAX_TRANSLATION_SPEED.
   --max-translation-acceleration <m/s^2> Max Cartesian translation acceleration. Default: 0.01, or MAX_TRANSLATION_ACCELERATION.
   --max-rotation-speed <rad/s>    Max Cartesian rotation speed. Default: 0.35, or MAX_ROTATION_SPEED.
+  --max-rotation-acceleration <rad/s^2> Max Cartesian rotation acceleration. Default: 0.1, or MAX_ROTATION_ACCELERATION.
   --ramp-time <s>                 Startup ramp time. Default: 2.0, or RAMP_TIME.
   --hold-at-end                   Keep commanding the final pose instead of exiting.
   --enable-force-correction       Enable experimental force correction.
@@ -30,6 +31,7 @@ Environment overrides:
   MAX_TRANSLATION_SPEED           Max Cartesian translation speed
   MAX_TRANSLATION_ACCELERATION    Max Cartesian translation acceleration
   MAX_ROTATION_SPEED              Max Cartesian rotation speed
+  MAX_ROTATION_ACCELERATION       Max Cartesian rotation acceleration
   RAMP_TIME                       Startup ramp time
   HOLD_AT_END                     1 to keep commanding the final pose
   ENABLE_FORCE_CORRECTION         1 to enable force correction
@@ -48,6 +50,7 @@ SPEED_SCALE="${SPEED_SCALE:-0.2}"
 MAX_TRANSLATION_SPEED="${MAX_TRANSLATION_SPEED:-0.03}"
 MAX_TRANSLATION_ACCELERATION="${MAX_TRANSLATION_ACCELERATION:-0.01}"
 MAX_ROTATION_SPEED="${MAX_ROTATION_SPEED:-0.35}"
+MAX_ROTATION_ACCELERATION="${MAX_ROTATION_ACCELERATION:-0.1}"
 RAMP_TIME="${RAMP_TIME:-2.0}"
 HOLD_AT_END="${HOLD_AT_END:-0}"
 ENABLE_FORCE_CORRECTION="${ENABLE_FORCE_CORRECTION:-0}"
@@ -81,6 +84,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-rotation-speed)
       MAX_ROTATION_SPEED="${2:?Missing value for --max-rotation-speed}"
+      shift 2
+      ;;
+    --max-rotation-acceleration)
+      MAX_ROTATION_ACCELERATION="${2:?Missing value for --max-rotation-acceleration}"
       shift 2
       ;;
     --ramp-time)
@@ -151,6 +158,7 @@ COMMAND=(
   --max-translation-speed "${MAX_TRANSLATION_SPEED}"
   --max-translation-acceleration "${MAX_TRANSLATION_ACCELERATION}"
   --max-rotation-speed "${MAX_ROTATION_SPEED}"
+  --max-rotation-acceleration "${MAX_ROTATION_ACCELERATION}"
   --ramp-time "${RAMP_TIME}"
 )
 

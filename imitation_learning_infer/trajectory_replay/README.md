@@ -69,7 +69,7 @@ bash ./launch.bash --robot-ip 172.16.0.2
 For a slower first test:
 
 ```bash
-bash ./launch.bash --robot-ip 172.16.0.2 --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --ramp-time 5.0
+bash ./launch.bash --robot-ip 172.16.0.2 --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --max-rotation-acceleration 0.02 --ramp-time 5.0
 ```
 
 Experimental force correction:
@@ -81,7 +81,7 @@ bash ./launch.bash --robot-ip 172.16.0.2 --enable-force-correction -- --force-ga
 To launch a converted session trajectory:
 
 ```bash
-bash ./launch.bash --robot-ip 172.16.0.2 --trajectory /path/to/session_0001/franka_replay/replay_trajectory.csv --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --ramp-time 5.0
+bash ./launch.bash --robot-ip 172.16.0.2 --trajectory /path/to/session_0001/franka_replay/replay_trajectory.csv --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --max-rotation-acceleration 0.02 --ramp-time 5.0
 ```
 
 ## Safety notes
@@ -148,10 +148,12 @@ writes `config/replay_trajectory.csv`.
 
 The converter accumulates the processed pose deltas into a start-relative CSV.
 By default it applies a zero-phase first-order low-pass filter to cumulative
-`x/y/z` before writing `replay_trajectory.csv`; `replay_trajectory_raw.csv`
-keeps the unfiltered trajectory. It does not resample timestamps. Runtime
-interpolation is handled by `replay_trajectory`, which evaluates a quintic
-time-scaling interpolation in the 1 kHz Franka callback.
+`x/y/z` and orientation before writing `replay_trajectory.csv`;
+`replay_trajectory_raw.csv` keeps the unfiltered trajectory. Orientation is
+filtered in rotation-vector space relative to the start pose, then converted
+back to a quaternion. It does not resample timestamps. Runtime interpolation is
+handled by `replay_trajectory`, which evaluates a quintic time-scaling
+interpolation in the 1 kHz Franka callback.
 
 Tune the output filter in [config/convert_session.yaml](config/convert_session.yaml):
 
@@ -159,6 +161,8 @@ Tune the output filter in [config/convert_session.yaml](config/convert_session.y
 filter:
   enabled: true
   cutoff_hz: 1.0
+  orientation_enabled: true
+  orientation_cutoff_hz: 1.0
   zero_phase: true
 ```
 
