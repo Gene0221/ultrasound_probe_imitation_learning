@@ -17,6 +17,7 @@ Options:
   --max-translation-acceleration <m/s^2> Max Cartesian translation acceleration. Default: 0.01, or MAX_TRANSLATION_ACCELERATION.
   --max-rotation-speed <rad/s>    Max Cartesian rotation speed. Default: 0.35, or MAX_ROTATION_SPEED.
   --ramp-time <s>                 Startup ramp time. Default: 2.0, or RAMP_TIME.
+  --hold-at-end                   Keep commanding the final pose instead of exiting.
   --enable-force-correction       Enable experimental force correction.
   -h, --help                      Show this help.
 
@@ -30,6 +31,7 @@ Environment overrides:
   MAX_TRANSLATION_ACCELERATION    Max Cartesian translation acceleration
   MAX_ROTATION_SPEED              Max Cartesian rotation speed
   RAMP_TIME                       Startup ramp time
+  HOLD_AT_END                     1 to keep commanding the final pose
   ENABLE_FORCE_CORRECTION         1 to enable force correction
 
 Examples:
@@ -47,6 +49,7 @@ MAX_TRANSLATION_SPEED="${MAX_TRANSLATION_SPEED:-0.03}"
 MAX_TRANSLATION_ACCELERATION="${MAX_TRANSLATION_ACCELERATION:-0.01}"
 MAX_ROTATION_SPEED="${MAX_ROTATION_SPEED:-0.35}"
 RAMP_TIME="${RAMP_TIME:-2.0}"
+HOLD_AT_END="${HOLD_AT_END:-0}"
 ENABLE_FORCE_CORRECTION="${ENABLE_FORCE_CORRECTION:-0}"
 EXTRA_ARGS=()
 
@@ -83,6 +86,10 @@ while [[ $# -gt 0 ]]; do
     --ramp-time)
       RAMP_TIME="${2:?Missing value for --ramp-time}"
       shift 2
+      ;;
+    --hold-at-end)
+      HOLD_AT_END="1"
+      shift
       ;;
     --enable-force-correction)
       ENABLE_FORCE_CORRECTION="1"
@@ -149,6 +156,10 @@ COMMAND=(
 
 if [[ "${ENABLE_FORCE_CORRECTION}" == "1" ]]; then
   COMMAND+=(--enable-force-correction)
+fi
+
+if [[ "${HOLD_AT_END}" == "1" ]]; then
+  COMMAND+=(--hold-at-end)
 fi
 
 COMMAND+=("${EXTRA_ARGS[@]}")

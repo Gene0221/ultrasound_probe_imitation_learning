@@ -70,6 +70,7 @@ struct Options {
   double max_translation_acceleration = 0.01;
   double max_rotation_speed = 0.35;
   double ramp_time_s = 2.0;
+  bool hold_at_end = false;
   bool enable_force_correction = false;
   double force_gain = 0.0001;
   double max_force_correction = 0.002;
@@ -396,6 +397,7 @@ void PrintUsage(const char* argv0) {
       << "  --max-translation-acceleration <m/s^2>  Default: 0.01\n"
       << "  --max-rotation-speed <rad/s>      Default: 0.35\n"
       << "  --ramp-time <s>                   Default: 2.0\n"
+      << "  --hold-at-end                     Keep commanding the final pose instead of exiting\n"
       << "  --enable-force-correction         Disabled by default\n"
       << "  --force-gain <m/N>                Default: 0.0001\n"
       << "  --max-force-correction <m>        Default: 0.002\n"
@@ -429,6 +431,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.max_rotation_speed = ParseDouble(require_value(arg), arg);
     } else if (arg == "--ramp-time") {
       opt.ramp_time_s = ParseDouble(require_value(arg), arg);
+    } else if (arg == "--hold-at-end") {
+      opt.hold_at_end = true;
     } else if (arg == "--enable-force-correction") {
       opt.enable_force_correction = true;
     } else if (arg == "--force-gain") {
@@ -585,6 +589,9 @@ int main(int argc, char** argv) {
       }
 
       if (finish_settle_elapsed_s > 2.0) {
+        if (opt.hold_at_end) {
+          return franka::CartesianPose(MatrixToArray(command_matrix));
+        }
         return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
       }
 
