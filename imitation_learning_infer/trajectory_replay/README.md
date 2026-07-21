@@ -69,7 +69,7 @@ bash ./launch.bash --robot-ip 172.16.0.2
 For a slower first test:
 
 ```bash
-bash ./launch.bash --robot-ip 172.16.0.2 --speed-scale 0.05 --max-translation-speed 0.005 --max-rotation-speed 0.05 --ramp-time 5.0
+bash ./launch.bash --robot-ip 172.16.0.2 --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --ramp-time 5.0
 ```
 
 Experimental force correction:
@@ -81,7 +81,7 @@ bash ./launch.bash --robot-ip 172.16.0.2 --enable-force-correction -- --force-ga
 To launch a converted session trajectory:
 
 ```bash
-bash ./launch.bash --robot-ip 172.16.0.2 --trajectory /path/to/session_0001/franka_replay/replay_trajectory.csv --speed-scale 0.05 --max-translation-speed 0.005 --max-rotation-speed 0.05 --ramp-time 5.0
+bash ./launch.bash --robot-ip 172.16.0.2 --trajectory /path/to/session_0001/franka_replay/replay_trajectory.csv --speed-scale 0.05 --max-translation-speed 0.005 --max-translation-acceleration 0.001 --max-rotation-speed 0.05 --ramp-time 5.0
 ```
 
 ## Safety notes

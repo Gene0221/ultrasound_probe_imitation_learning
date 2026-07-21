@@ -67,6 +67,7 @@ struct Options {
   std::string mode = "relative";
   double speed_scale = 1.0;
   double max_translation_speed = 0.03;
+  double max_translation_acceleration = 0.01;
   double max_rotation_speed = 0.35;
   double ramp_time_s = 2.0;
   bool enable_force_correction = false;
@@ -96,17 +97,20 @@ Vec3 operator*(const Vec3& v, double s) {
   return Vec3{v.x * s, v.y * s, v.z * s};
 }
 
+Vec3 operator/(const Vec3& v, double s) {
+  return Vec3{v.x / s, v.y / s, v.z / s};
+}
+
 double Norm(const Vec3& v) {
   return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-Vec3 LimitStep(const Vec3& current, const Vec3& target, double max_step) {
-  const Vec3 delta = target - current;
-  const double length = Norm(delta);
-  if (length <= max_step || length < 1e-12) {
-    return target;
+Vec3 LimitVectorNorm(const Vec3& v, double max_norm) {
+  const double length = Norm(v);
+  if (length <= max_norm || length < 1e-12) {
+    return v;
   }
-  return current + delta * (max_step / length);
+  return v * (max_norm / length);
 }
 
 Quaternion Normalize(const Quaternion& q) {
@@ -372,6 +376,7 @@ void PrintUsage(const char* argv0) {
       << "  --mode <relative|absolute>        Default: relative\n"
       << "  --speed-scale <value>             Default: 1.0\n"
       << "  --max-translation-speed <m/s>     Default: 0.03\n"
+      << "  --max-translation-acceleration <m/s^2>  Default: 0.01\n"
       << "  --max-rotation-speed <rad/s>      Default: 0.35\n"
       << "  --ramp-time <s>                   Default: 2.0\n"
       << "  --enable-force-correction         Disabled by default\n"
@@ -401,6 +406,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.speed_scale = ParseDouble(require_value(arg), arg);
     } else if (arg == "--max-translation-speed") {
       opt.max_translation_speed = ParseDouble(require_value(arg), arg);
+    } else if (arg == "--max-translation-acceleration") {
+      opt.max_translation_acceleration = ParseDouble(require_value(arg), arg);
     } else if (arg == "--max-rotation-speed") {
       opt.max_rotation_speed = ParseDouble(require_value(arg), arg);
     } else if (arg == "--ramp-time") {
@@ -435,6 +442,9 @@ Options ParseArgs(int argc, char** argv) {
   }
   if (opt.max_translation_speed <= 0.0) {
     throw std::runtime_error("--max-translation-speed must be positive.");
+  }
+  if (opt.max_translation_acceleration <= 0.0) {
+    throw std::runtime_error("--max-translation-acceleration must be positive.");
   }
   if (opt.max_rotation_speed <= 0.0) {
     throw std::runtime_error("--max-rotation-speed must be positive.");
@@ -476,6 +486,7 @@ int main(int argc, char** argv) {
     const franka::RobotState initial_state = robot.readOnce();
     const Matrix4 start_pose_matrix = ArrayToMatrix(initial_state.O_T_EE_c);
     Pose commanded_pose = MatrixToPose(start_pose_matrix);
+    Vec3 commanded_velocity{0.0, 0.0, 0.0};
 
     const double start_time_s = trajectory.front().time_s;
     const double end_time_s = trajectory.back().time_s;
@@ -510,9 +521,29 @@ int main(int argc, char** argv) {
       }
 
       const double ramp_factor = opt.ramp_time_s > 1e-9 ? Smoothstep(control_elapsed_s / opt.ramp_time_s) : 1.0;
-      const double max_translation_step = opt.max_translation_speed * opt.speed_scale * ramp_factor * dt;
+      const double max_translation_speed = opt.max_translation_speed * opt.speed_scale * ramp_factor;
+      const double max_translation_acceleration = opt.max_translation_acceleration * opt.speed_scale;
       const double max_rotation_step = opt.max_rotation_speed * opt.speed_scale * ramp_factor * dt;
-      commanded_pose.p = LimitStep(commanded_pose.p, target_pose.p, max_translation_step);
+
+      const Vec3 translation_error = target_pose.p - commanded_pose.p;
+      const double translation_error_norm = Norm(translation_error);
+      const double stopping_speed = std::sqrt(2.0 * max_translation_acceleration * translation_error_norm);
+      const double desired_speed_limit = std::min(max_translation_speed, stopping_speed);
+      const Vec3 desired_velocity = LimitVectorNorm(
+          translation_error / std::max(dt, 1e-9),
+          desired_speed_limit);
+      const Vec3 velocity_delta = LimitVectorNorm(
+          desired_velocity - commanded_velocity,
+          max_translation_acceleration * dt);
+      commanded_velocity = LimitVectorNorm(commanded_velocity + velocity_delta, max_translation_speed);
+
+      const Vec3 translation_step = commanded_velocity * dt;
+      if (translation_error_norm < 1e-7 && Norm(commanded_velocity) < 1e-5) {
+        commanded_pose.p = target_pose.p;
+        commanded_velocity = Vec3{0.0, 0.0, 0.0};
+      } else {
+        commanded_pose.p = commanded_pose.p + translation_step;
+      }
       commanded_pose.q = LimitRotationStep(commanded_pose.q, target_pose.q, max_rotation_step);
 
       const Matrix4 command_matrix = PoseToMatrix(commanded_pose);

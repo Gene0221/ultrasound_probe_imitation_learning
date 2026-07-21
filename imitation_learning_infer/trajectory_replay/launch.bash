@@ -14,6 +14,7 @@ Options:
   --mode <relative|absolute>      Replay mode. Default: relative, or REPLAY_MODE.
   --speed-scale <value>           Speed scale in (0, 1]. Default: 0.2, or SPEED_SCALE.
   --max-translation-speed <m/s>   Max Cartesian translation speed. Default: 0.03, or MAX_TRANSLATION_SPEED.
+  --max-translation-acceleration <m/s^2> Max Cartesian translation acceleration. Default: 0.01, or MAX_TRANSLATION_ACCELERATION.
   --max-rotation-speed <rad/s>    Max Cartesian rotation speed. Default: 0.35, or MAX_ROTATION_SPEED.
   --ramp-time <s>                 Startup ramp time. Default: 2.0, or RAMP_TIME.
   --enable-force-correction       Enable experimental force correction.
@@ -26,6 +27,7 @@ Environment overrides:
   REPLAY_MODE                     relative or absolute
   SPEED_SCALE                     Replay speed scale
   MAX_TRANSLATION_SPEED           Max Cartesian translation speed
+  MAX_TRANSLATION_ACCELERATION    Max Cartesian translation acceleration
   MAX_ROTATION_SPEED              Max Cartesian rotation speed
   RAMP_TIME                       Startup ramp time
   ENABLE_FORCE_CORRECTION         1 to enable force correction
@@ -42,6 +44,7 @@ TRAJECTORY="${TRAJECTORY:-${SCRIPT_DIR}/config/replay_example.csv}"
 REPLAY_MODE="${REPLAY_MODE:-relative}"
 SPEED_SCALE="${SPEED_SCALE:-0.2}"
 MAX_TRANSLATION_SPEED="${MAX_TRANSLATION_SPEED:-0.03}"
+MAX_TRANSLATION_ACCELERATION="${MAX_TRANSLATION_ACCELERATION:-0.01}"
 MAX_ROTATION_SPEED="${MAX_ROTATION_SPEED:-0.35}"
 RAMP_TIME="${RAMP_TIME:-2.0}"
 ENABLE_FORCE_CORRECTION="${ENABLE_FORCE_CORRECTION:-0}"
@@ -67,6 +70,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --max-translation-speed)
       MAX_TRANSLATION_SPEED="${2:?Missing value for --max-translation-speed}"
+      shift 2
+      ;;
+    --max-translation-acceleration)
+      MAX_TRANSLATION_ACCELERATION="${2:?Missing value for --max-translation-acceleration}"
       shift 2
       ;;
     --max-rotation-speed)
@@ -135,6 +142,7 @@ COMMAND=(
   --mode "${REPLAY_MODE}"
   --speed-scale "${SPEED_SCALE}"
   --max-translation-speed "${MAX_TRANSLATION_SPEED}"
+  --max-translation-acceleration "${MAX_TRANSLATION_ACCELERATION}"
   --max-rotation-speed "${MAX_ROTATION_SPEED}"
   --ramp-time "${RAMP_TIME}"
 )
