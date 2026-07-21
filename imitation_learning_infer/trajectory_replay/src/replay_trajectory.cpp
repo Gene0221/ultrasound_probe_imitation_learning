@@ -1,4 +1,4 @@
-#include <franka/control_types.h>
+﻿#include <franka/control_types.h>
 #include <franka/duration.h>
 #include <franka/exception.h>
 #include <franka/robot.h>
@@ -103,6 +103,15 @@ Vec3 operator/(const Vec3& v, double s) {
 
 double Norm(const Vec3& v) {
   return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+template <std::size_t N>
+double MaxAbs(const std::array<double, N>& values) {
+  double result = 0.0;
+  for (double value : values) {
+    result = std::max(result, std::fabs(value));
+  }
+  return result;
 }
 
 Vec3 LimitVectorNorm(const Vec3& v, double max_norm) {
@@ -492,6 +501,7 @@ int main(int argc, char** argv) {
     const double end_time_s = trajectory.back().time_s;
     double elapsed_s = 0.0;
     double control_elapsed_s = 0.0;
+    double finish_settle_elapsed_s = 0.0;
     std::cout << "[INFO] Replay mode: " << opt.mode << "\n";
     std::cout << "[INFO] Duration after speed scaling: " << (end_time_s - start_time_s) / opt.speed_scale << " s\n";
     std::cout << "[INFO] Startup ramp time: " << opt.ramp_time_s << " s\n";
@@ -511,8 +521,10 @@ int main(int argc, char** argv) {
       }
 
       Pose target_pose = MatrixToPose(target_matrix);
-
-      if (opt.enable_force_correction) {
+      const bool stop_requested = g_stop_requested.load();
+      if (stop_requested) {
+        target_pose = commanded_pose;
+      } else if (opt.enable_force_correction) {
         const double measured_fz = opt.force_sign * state.O_F_ext_hat_K[2];
         const double force_error = sample.target_fz - measured_fz;
         const double correction = Clamp(opt.force_gain * force_error, -opt.max_force_correction, opt.max_force_correction);
@@ -552,8 +564,20 @@ int main(int argc, char** argv) {
       const bool command_reached =
           Norm(target_pose.p - commanded_pose.p) < 1e-5 &&
           QuaternionAngle(target_pose.q, commanded_pose.q) < 1e-4;
+      const bool command_stopped = Norm(commanded_velocity) < 1e-5;
+      const bool robot_stopped = MaxAbs(state.dq) < 1e-3;
 
-      if (g_stop_requested.load() || (trajectory_time_done && command_reached)) {
+      if (trajectory_time_done && command_reached && command_stopped && robot_stopped) {
+        finish_settle_elapsed_s += dt;
+      } else {
+        finish_settle_elapsed_s = 0.0;
+      }
+
+      if (stop_requested && command_stopped && robot_stopped) {
+        return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
+      }
+
+      if (finish_settle_elapsed_s > 1.0) {
         return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
       }
 
@@ -571,5 +595,8 @@ int main(int argc, char** argv) {
     return 1;
   }
 }
+
+
+
 
 
