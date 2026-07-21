@@ -565,19 +565,18 @@ int main(int argc, char** argv) {
           Norm(target_pose.p - commanded_pose.p) < 1e-5 &&
           QuaternionAngle(target_pose.q, commanded_pose.q) < 1e-4;
       const bool command_stopped = Norm(commanded_velocity) < 1e-5;
-      const bool robot_stopped = MaxAbs(state.dq) < 1e-3;
 
-      if (trajectory_time_done && command_reached && command_stopped && robot_stopped) {
+      if (trajectory_time_done && command_reached && command_stopped) {
         finish_settle_elapsed_s += dt;
       } else {
         finish_settle_elapsed_s = 0.0;
       }
 
-      if (stop_requested && command_stopped && robot_stopped) {
+      if (stop_requested && command_stopped) {
         return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
       }
 
-      if (finish_settle_elapsed_s > 1.0) {
+      if (finish_settle_elapsed_s > 2.0) {
         return franka::MotionFinished(franka::CartesianPose(MatrixToArray(command_matrix)));
       }
 
@@ -595,6 +594,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 }
+
 
 
 
