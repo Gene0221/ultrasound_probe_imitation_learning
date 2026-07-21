@@ -146,22 +146,10 @@ replay:
 Relative `output_dir` paths are resolved from `trajectory_replay/`, so this
 writes `config/replay_trajectory.csv`.
 
-`replay_trajectory.csv` is smoothed and resampled by default. This is recommended
-for Franka replay because raw sampled pose trajectories can contain small
-high-frequency direction changes that trigger acceleration discontinuity
-reflexes. Tune this in [config/convert_session.yaml](config/convert_session.yaml):
-
-```yaml
-smoothing:
-  enabled: true
-  resample_dt_s: 0.02
-  position_window: 9
-  orientation_alpha: 0.15
-  fixed_orientation: false
-```
-
-For the safest first test, set `fixed_orientation: true` to replay translation
-only while holding the start orientation.
+The converter does not smooth or resample the trajectory. It only accumulates
+the processed pose deltas into a start-relative CSV. Runtime smoothing is handled
+by `replay_trajectory`, which evaluates a quintic time-scaling interpolation in
+the 1 kHz Franka callback.
 
 These directory and file names are configurable under `session_layout` and
 `replay`. For one-off runs, command-line arguments still override the config:

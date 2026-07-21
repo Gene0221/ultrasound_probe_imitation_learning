@@ -23,13 +23,3 @@ replay:
   raw_output_file: replay_trajectory_raw.csv
   write_raw_copy: true
   max_force_time_delta_s: 0.05
-
-smoothing:
-  # Recommended for Franka replay: raw sampled trajectories can contain
-  # high-frequency pose jitter that triggers acceleration discontinuity reflexes.
-  enabled: true
-  resample_dt_s: 0.02
-  position_window: 9
-  orientation_alpha: 0.15
-  # Set true for the safest first translation-only replay test.
-  fixed_orientation: false

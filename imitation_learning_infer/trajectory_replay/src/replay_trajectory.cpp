@@ -85,6 +85,13 @@ double Smoothstep(double value) {
   return x * x * (3.0 - 2.0 * x);
 }
 
+double QuinticTimeScaling(double value) {
+  const double x = Clamp(value, 0.0, 1.0);
+  const double x2 = x * x;
+  const double x3 = x2 * x;
+  return 10.0 * x3 - 15.0 * x3 * x + 6.0 * x3 * x2;
+}
+
 Vec3 operator+(const Vec3& a, const Vec3& b) {
   return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -361,7 +368,8 @@ TrajectorySample Interpolate(const std::vector<TrajectorySample>& samples, doubl
   });
   const auto& b = *upper;
   const auto& a = *(upper - 1);
-  const double alpha = (t - a.time_s) / (b.time_s - a.time_s);
+  const double s = (t - a.time_s) / (b.time_s - a.time_s);
+  const double alpha = QuinticTimeScaling(s);
 
   TrajectorySample out;
   out.time_s = t;

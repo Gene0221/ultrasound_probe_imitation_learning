@@ -106,27 +106,6 @@ def normalize_quaternion(q: list[float]) -> list[float]:
     return [v / n for v in q]
 
 
-def quat_dot(a: list[float], b: list[float]) -> float:
-    return sum(x * y for x, y in zip(a, b))
-
-
-def quat_slerp(a: list[float], b: list[float], t: float) -> list[float]:
-    a = normalize_quaternion(a)
-    b = normalize_quaternion(b)
-    cos_theta = quat_dot(a, b)
-    if cos_theta < 0.0:
-        b = [-v for v in b]
-        cos_theta = -cos_theta
-    cos_theta = max(-1.0, min(1.0, cos_theta))
-    if cos_theta > 0.9995:
-        return normalize_quaternion([a[i] + t * (b[i] - a[i]) for i in range(4)])
-    theta = math.acos(cos_theta)
-    sin_theta = math.sin(theta)
-    w1 = math.sin((1.0 - t) * theta) / sin_theta
-    w2 = math.sin(t * theta) / sin_theta
-    return normalize_quaternion([w1 * a[i] + w2 * b[i] for i in range(4)])
-
-
 def quat_to_matrix(q: list[float]) -> list[list[float]]:
     x, y, z, w = normalize_quaternion(q)
     xx, yy, zz = x * x, y * y, z * z
@@ -239,145 +218,6 @@ def nearest_force(timestamp: float, force_records: list[dict[str, Any]], force_t
     return get_force_value(force_records[best])
 
 
-def lerp(a: float, b: float, t: float) -> float:
-    return a + t * (b - a)
-
-
-def interpolate_rows(rows: list[dict[str, float]], time_s: float) -> dict[str, float]:
-    if time_s <= rows[0]["time_s"]:
-        return dict(rows[0])
-    if time_s >= rows[-1]["time_s"]:
-        out = dict(rows[-1])
-        out["time_s"] = time_s
-        return out
-
-    times = [row["time_s"] for row in rows]
-    pos = bisect_left(times, time_s)
-    a = rows[pos - 1]
-    b = rows[pos]
-    alpha = (time_s - a["time_s"]) / (b["time_s"] - a["time_s"])
-    q = quat_slerp([a["qx"], a["qy"], a["qz"], a["qw"]], [b["qx"], b["qy"], b["qz"], b["qw"]], alpha)
-    return {
-        "time_s": time_s,
-        "x": lerp(a["x"], b["x"], alpha),
-        "y": lerp(a["y"], b["y"], alpha),
-        "z": lerp(a["z"], b["z"], alpha),
-        "qx": q[0],
-        "qy": q[1],
-        "qz": q[2],
-        "qw": q[3],
-        "target_fz": lerp(a["target_fz"], b["target_fz"], alpha),
-    }
-
-
-def resample_rows(rows: list[dict[str, float]], dt_s: float) -> list[dict[str, float]]:
-    if dt_s <= 0.0:
-        raise ValueError("smoothing.resample_dt_s must be positive.")
-    end_time_s = rows[-1]["time_s"]
-    out: list[dict[str, float]] = []
-    idx = 0
-    while True:
-        t = idx * dt_s
-        if t >= end_time_s:
-            break
-        out.append(interpolate_rows(rows, t))
-        idx += 1
-    out.append(interpolate_rows(rows, end_time_s))
-    return out
-
-
-def smooth_positions(rows: list[dict[str, float]], window: int) -> None:
-    if window <= 1:
-        return
-    if window % 2 == 0:
-        raise ValueError("smoothing.position_window must be odd.")
-    half = window // 2
-    original = [(row["x"], row["y"], row["z"]) for row in rows]
-    for idx, row in enumerate(rows):
-        lo = max(0, idx - half)
-        hi = min(len(rows), idx + half + 1)
-        count = hi - lo
-        row["x"] = sum(original[j][0] for j in range(lo, hi)) / count
-        row["y"] = sum(original[j][1] for j in range(lo, hi)) / count
-        row["z"] = sum(original[j][2] for j in range(lo, hi)) / count
-    rows[0]["x"], rows[0]["y"], rows[0]["z"] = original[0]
-    rows[-1]["x"], rows[-1]["y"], rows[-1]["z"] = original[-1]
-
-
-def row_quaternion(row: dict[str, float]) -> list[float]:
-    return [row["qx"], row["qy"], row["qz"], row["qw"]]
-
-
-def set_row_quaternion(row: dict[str, float], q: list[float]) -> None:
-    q = normalize_quaternion(q)
-    row["qx"], row["qy"], row["qz"], row["qw"] = q
-
-
-def quat_angle(a: list[float], b: list[float]) -> float:
-    dot = abs(quat_dot(normalize_quaternion(a), normalize_quaternion(b)))
-    return 2.0 * math.acos(max(-1.0, min(1.0, dot)))
-
-
-def smooth_orientations(rows: list[dict[str, float]], alpha: float, *, fixed_orientation: bool) -> None:
-    if fixed_orientation:
-        first = row_quaternion(rows[0])
-        for row in rows:
-            set_row_quaternion(row, first)
-        return
-    if alpha >= 1.0:
-        return
-    if alpha <= 0.0:
-        raise ValueError("smoothing.orientation_alpha must be in (0, 1].")
-    filtered = row_quaternion(rows[0])
-    for row in rows[1:]:
-        target = row_quaternion(row)
-        filtered = quat_slerp(filtered, target, alpha)
-        set_row_quaternion(row, filtered)
-
-
-
-def limit_orientation_speed(rows: list[dict[str, float]], max_speed_rad_s: float | None) -> None:
-    if max_speed_rad_s is None or max_speed_rad_s <= 0.0:
-        return
-    previous = row_quaternion(rows[0])
-    previous_time_s = rows[0]["time_s"]
-    set_row_quaternion(rows[0], previous)
-    for row in rows[1:]:
-        current_time_s = row["time_s"]
-        dt = current_time_s - previous_time_s
-        if dt <= 0.0:
-            set_row_quaternion(row, previous)
-            continue
-        target = row_quaternion(row)
-        angle = quat_angle(previous, target)
-        max_angle = max_speed_rad_s * dt
-        if angle > max_angle and angle > 1e-12:
-            limited = quat_slerp(previous, target, max_angle / angle)
-        else:
-            limited = target
-        set_row_quaternion(row, limited)
-        previous = limited
-        previous_time_s = current_time_s
-
-
-def apply_smoothing(rows: list[dict[str, float]], smoothing_cfg: dict[str, Any]) -> list[dict[str, float]]:
-    if not bool(smoothing_cfg.get("enabled", False)):
-        return rows
-    smoothed = resample_rows(rows, float(smoothing_cfg.get("resample_dt_s", 0.02)))
-    smooth_positions(smoothed, int(smoothing_cfg.get("position_window", 9)))
-    smooth_orientations(
-        smoothed,
-        float(smoothing_cfg.get("orientation_alpha", 0.15)),
-        fixed_orientation=bool(smoothing_cfg.get("fixed_orientation", False)),
-    )
-    max_orientation_speed = smoothing_cfg.get("max_orientation_speed_rad_s")
-    limit_orientation_speed(
-        smoothed,
-        None if max_orientation_speed in (None, "") else float(max_orientation_speed),
-    )
-    return smoothed
-
-
 def write_replay_csv(path: Path, rows: list[dict[str, float]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -426,7 +266,6 @@ def main() -> None:
     config = load_config(args.config)
     session_layout = config.get("session_layout", {})
     replay_cfg = config.get("replay", {})
-    smoothing_cfg = config.get("smoothing", {})
 
     session = resolve_session(config, args.session)
     pose_path = resolve_session_file(
@@ -516,13 +355,11 @@ def main() -> None:
         write_replay_csv(raw_output_path, raw_rows)
         print(f"[INFO] Wrote raw replay CSV: {raw_output_path}")
 
-    output_rows = apply_smoothing(raw_rows, smoothing_cfg)
+    output_rows = raw_rows
     write_replay_csv(output_path, output_rows)
 
     print(f"[DONE] Wrote replay CSV: {output_path}")
     print(f"[INFO] Output rows: {len(output_rows)} (raw rows: {len(raw_rows)})")
-    if smoothing_cfg.get("enabled", False):
-        print(f"[INFO] Smoothing enabled: {smoothing_cfg}")
     print(f"[INFO] Pose records: {len(pose_records)}, force records: {len(force_records)}")
     if skipped_duplicate_identity:
         print(f"[INFO] Skipped duplicate identity records at non-increasing timestamps: {skipped_duplicate_identity}")
