@@ -76,6 +76,7 @@ struct Options {
   double force_gain = 0.0001;
   double max_force_correction = 0.002;
   double force_sign = 1.0;
+  double bspline_smoothing_factor = 0.0016;
 };
 
 double Clamp(double value, double lo, double hi) {
@@ -92,6 +93,18 @@ double QuinticTimeScaling(double value) {
   const double x2 = x * x;
   const double x3 = x2 * x;
   return 10.0 * x3 - 15.0 * x3 * x + 6.0 * x3 * x2;
+}
+
+std::array<double, 4> CubicBsplineBasis(double value) {
+  const double u = Clamp(value, 0.0, 1.0);
+  const double u2 = u * u;
+  const double u3 = u2 * u;
+  return std::array<double, 4>{
+      (1.0 - 3.0 * u + 3.0 * u2 - u3) / 6.0,
+      (4.0 - 6.0 * u2 + 3.0 * u3) / 6.0,
+      (1.0 + 3.0 * u + 3.0 * u2 - 3.0 * u3) / 6.0,
+      u3 / 6.0,
+  };
 }
 
 Vec3 operator+(const Vec3& a, const Vec3& b) {
@@ -387,6 +400,49 @@ std::vector<TrajectorySample> LoadTrajectoryCsv(const std::string& path) {
   return samples;
 }
 
+TrajectorySample SmoothSample(
+    const TrajectorySample& previous,
+    const TrajectorySample& current,
+    const TrajectorySample& next,
+    double factor) {
+  const double denom = 1.0 + 2.0 * factor;
+
+  TrajectorySample out = current;
+  out.pose.p = (current.pose.p + (previous.pose.p + next.pose.p) * factor) / denom;
+  out.target_fz = (current.target_fz + factor * (previous.target_fz + next.target_fz)) / denom;
+
+  Quaternion q_prev = previous.pose.q;
+  Quaternion q_curr = current.pose.q;
+  Quaternion q_next = next.pose.q;
+  if (Dot(q_curr, q_prev) < 0.0) {
+    q_prev = Quaternion{-q_prev.x, -q_prev.y, -q_prev.z, -q_prev.w};
+  }
+  if (Dot(q_curr, q_next) < 0.0) {
+    q_next = Quaternion{-q_next.x, -q_next.y, -q_next.z, -q_next.w};
+  }
+  out.pose.q = Normalize(Quaternion{
+      (q_curr.x + factor * (q_prev.x + q_next.x)) / denom,
+      (q_curr.y + factor * (q_prev.y + q_next.y)) / denom,
+      (q_curr.z + factor * (q_prev.z + q_next.z)) / denom,
+      (q_curr.w + factor * (q_prev.w + q_next.w)) / denom,
+  });
+  return out;
+}
+
+std::vector<TrajectorySample> SmoothTrajectorySamples(
+    const std::vector<TrajectorySample>& samples,
+    double smoothing_factor) {
+  if (smoothing_factor <= 0.0 || samples.size() < 3) {
+    return samples;
+  }
+
+  std::vector<TrajectorySample> smoothed = samples;
+  for (std::size_t i = 1; i + 1 < samples.size(); ++i) {
+    smoothed[i] = SmoothSample(samples[i - 1], samples[i], samples[i + 1], smoothing_factor);
+  }
+  return smoothed;
+}
+
 TrajectorySample Interpolate(const std::vector<TrajectorySample>& samples, double t) {
   if (t <= samples.front().time_s) {
     return samples.front();
@@ -398,16 +454,46 @@ TrajectorySample Interpolate(const std::vector<TrajectorySample>& samples, doubl
   auto upper = std::upper_bound(samples.begin(), samples.end(), t, [](double value, const TrajectorySample& sample) {
     return value < sample.time_s;
   });
-  const auto& b = *upper;
-  const auto& a = *(upper - 1);
-  const double s = (t - a.time_s) / (b.time_s - a.time_s);
-  const double alpha = QuinticTimeScaling(s);
+  const std::size_t right = static_cast<std::size_t>(upper - samples.begin());
+  const std::size_t left = right - 1;
+  const auto& a = samples[left];
+  const auto& b = samples[right];
+  const double u = (t - a.time_s) / (b.time_s - a.time_s);
+  const auto basis = CubicBsplineBasis(u);
+
+  auto sample_at = [&](long long index) -> const TrajectorySample& {
+    const long long last = static_cast<long long>(samples.size() - 1);
+    const long long clamped = std::max(0LL, std::min(index, last));
+    return samples[static_cast<std::size_t>(clamped)];
+  };
+
+  const std::array<const TrajectorySample*, 4> control{
+      &sample_at(static_cast<long long>(left) - 1),
+      &sample_at(static_cast<long long>(left)),
+      &sample_at(static_cast<long long>(left) + 1),
+      &sample_at(static_cast<long long>(left) + 2),
+  };
 
   TrajectorySample out;
   out.time_s = t;
-  out.pose.p = a.pose.p * (1.0 - alpha) + b.pose.p * alpha;
-  out.pose.q = Slerp(a.pose.q, b.pose.q, alpha);
-  out.target_fz = a.target_fz * (1.0 - alpha) + b.target_fz * alpha;
+  out.pose.p = Vec3{0.0, 0.0, 0.0};
+  out.pose.q = Quaternion{0.0, 0.0, 0.0, 0.0};
+  out.target_fz = 0.0;
+
+  const Quaternion reference_q = control[1]->pose.q;
+  for (std::size_t i = 0; i < control.size(); ++i) {
+    Quaternion q = control[i]->pose.q;
+    if (Dot(reference_q, q) < 0.0) {
+      q = Quaternion{-q.x, -q.y, -q.z, -q.w};
+    }
+    out.pose.p = out.pose.p + control[i]->pose.p * basis[i];
+    out.pose.q.x += q.x * basis[i];
+    out.pose.q.y += q.y * basis[i];
+    out.pose.q.z += q.z * basis[i];
+    out.pose.q.w += q.w * basis[i];
+    out.target_fz += control[i]->target_fz * basis[i];
+  }
+  out.pose.q = Normalize(out.pose.q);
   return out;
 }
 
@@ -433,7 +519,8 @@ void PrintUsage(const char* argv0) {
       << "  --enable-force-correction         Disabled by default\n"
       << "  --force-gain <m/N>                Default: 0.0001\n"
       << "  --max-force-correction <m>        Default: 0.002\n"
-      << "  --force-sign <1|-1>               Default: 1\n";
+      << "  --force-sign <1|-1>               Default: 1\n"
+      << "  --bspline-smoothing-factor <value> Default: 0.0016\n";
 }
 
 Options ParseArgs(int argc, char** argv) {
@@ -475,6 +562,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.max_force_correction = ParseDouble(require_value(arg), arg);
     } else if (arg == "--force-sign") {
       opt.force_sign = ParseDouble(require_value(arg), arg);
+    } else if (arg == "--bspline-smoothing-factor") {
+      opt.bspline_smoothing_factor = ParseDouble(require_value(arg), arg);
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -510,6 +599,9 @@ Options ParseArgs(int argc, char** argv) {
   if (opt.ramp_time_s < 0.0) {
     throw std::runtime_error("--ramp-time must be non-negative.");
   }
+  if (opt.bspline_smoothing_factor < 0.0) {
+    throw std::runtime_error("--bspline-smoothing-factor must be non-negative.");
+  }
   return opt;
 }
 
@@ -532,9 +624,12 @@ int main(int argc, char** argv) {
 
   try {
     const Options opt = ParseArgs(argc, argv);
-    const auto trajectory = LoadTrajectoryCsv(opt.trajectory_path);
+    const auto raw_trajectory = LoadTrajectoryCsv(opt.trajectory_path);
+    const auto trajectory = SmoothTrajectorySamples(raw_trajectory, opt.bspline_smoothing_factor);
 
     std::cout << "[INFO] Loaded " << trajectory.size() << " trajectory samples from " << opt.trajectory_path << "\n";
+    std::cout << "[INFO] Interpolation: local cubic B-spline approximation\n";
+    std::cout << "[INFO] B-spline smoothing factor: " << opt.bspline_smoothing_factor << "\n";
     std::cout << "[INFO] Connecting to Franka at " << opt.robot_ip << "\n";
 
     franka::Robot robot(opt.robot_ip);

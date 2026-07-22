@@ -8,7 +8,7 @@ The intended validation path is:
 human-side collection
   -> tag-to-flange transform
   -> flange pose trajectory + optional target Fz
-  -> replay_trajectory on Franka Panda
+  -> replay_trajectory_quintic or replay_trajectory_bspline on Franka Panda
   -> record executed pose and force for validation
 ```
 
@@ -22,13 +22,20 @@ Default behavior:
 - relative trajectory mode
 - no force correction
 - rate-limited 1 kHz command output
+- quintic time-scaling interpolation unless `--interpolator bspline` is selected
 
 Optional behavior:
 
 - absolute trajectory mode
 - low-gain force correction along the current tool z axis
+- local cubic B-spline approximation for smoother target generation
 
 Force correction is disabled by default because the correct force sign and tool normal direction must be verified on the real probe mount before contact tests.
+
+Two replay executables are built:
+
+- `replay_trajectory_quintic`: the previous implementation, using quintic time-scaling between adjacent CSV samples.
+- `replay_trajectory_bspline`: a local cubic B-spline approximation over neighboring CSV samples. This is smoother, but it does not strictly pass through every waypoint.
 
 ## CSV format
 
@@ -64,6 +71,26 @@ Start with the robot away from contact:
 
 ```bash
 bash ./launch.bash --robot-ip 172.16.0.2
+```
+
+Select the interpolation executable explicitly:
+
+```bash
+bash ./launch.bash --robot-ip 172.16.0.2 --interpolator quintic
+bash ./launch.bash --robot-ip 172.16.0.2 --interpolator bspline
+```
+
+Launch defaults can also be edited in [config/replay_launch.conf](config/replay_launch.conf):
+
+```bash
+REPLAY_INTERPOLATOR="bspline"
+BSPLINE_SMOOTHING_FACTOR="0.0016"
+```
+
+The B-spline smoothing factor is also available from the terminal:
+
+```bash
+bash ./launch.bash --robot-ip 172.16.0.2 --interpolator bspline --bspline-smoothing-factor 0.0016
 ```
 
 For a slower first test:
@@ -112,7 +139,7 @@ The script writes:
 <session>/franka_replay/replay_trajectory.csv
 ```
 
-`flange_pose_deltas.jsonl` stores frame-to-frame deltas, so the converter accumulates them into a start-relative trajectory. This matches `replay_trajectory --mode relative`.
+`flange_pose_deltas.jsonl` stores frame-to-frame deltas, so the converter accumulates them into a start-relative trajectory. This matches `launch.bash --mode relative`.
 
 Set the processed session directory in [config/convert_session.yaml](config/convert_session.yaml):
 
@@ -153,7 +180,9 @@ By default it applies a zero-phase first-order low-pass filter to cumulative
 filtered in rotation-vector space relative to the start pose, then converted
 back to a quaternion. It does not resample timestamps. Runtime interpolation is
 handled by `replay_trajectory`, which evaluates a quintic time-scaling
-interpolation in the 1 kHz Franka callback.
+interpolation in the 1 kHz Franka callback by default. Use
+`launch.bash --interpolator bspline` to launch the B-spline replay executable
+instead.
 
 Tune the output filter in [config/convert_session.yaml](config/convert_session.yaml):
 
