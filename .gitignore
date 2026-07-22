@@ -79,6 +79,7 @@ data/
 datasets/
 
 # Project runtime artifacts
+imitation_learning_infer/trajectory_replay/analysis/
 data_collection/6D_force_grasping/output/
 data_collection/6D_force_grasping/config/zero_bias.json
 data_collection/hospital_data_collection/output/

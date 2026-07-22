@@ -93,6 +93,39 @@ The B-spline smoothing factor is also available from the terminal:
 bash ./launch.bash --robot-ip 172.16.0.2 --interpolator bspline --bspline-smoothing-factor 0.0016
 ```
 
+## Plot interpolation kinematics
+
+The plotting script reads defaults from [config/plot_trajectory.yaml](config/plot_trajectory.yaml):
+
+```bash
+python scripts/plot_spline_vs_hermite.py
+```
+
+Useful YAML fields:
+
+```yaml
+paths:
+  input_csv: ./config/replay_trajectory.csv
+  output_dir: ./analysis
+
+plot:
+  mode: comparison  # comparison, bspline, or polynomial
+  dt: 0.001
+  zoom_start_s: 0.0
+  zoom_end_s: 5.0
+
+bspline:
+  smoothing_factor: 0.0016
+```
+
+Command-line arguments can still override the config for one run:
+
+```bash
+python scripts/plot_spline_vs_hermite.py --mode bspline --smoothing-factor 0.0016
+python scripts/plot_spline_vs_hermite.py --mode polynomial
+python scripts/plot_spline_vs_hermite.py --mode comparison
+```
+
 For a slower first test:
 
 ```bash
