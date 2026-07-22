@@ -6,21 +6,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<EOF
 Usage:
-  $(basename "$0") --robot-ip <ip> [options] [-- extra replay args]
+  $(basename "$0") [options] [-- extra replay args]
 
 Options:
-  --robot-ip <ip>                 Franka robot IP address. Can also use ROBOT_IP.
+  --robot-ip <ip>                 Franka robot IP address. Overrides ROBOT_IP.
   --config <file>                 Launch config file. Default: config/replay_launch.conf, or REPLAY_LAUNCH_CONFIG.
-  --interpolator <quintic|bspline> Replay executable to launch. Default: quintic, or REPLAY_INTERPOLATOR.
-  --trajectory <csv>              Replay CSV path. Default: config/replay_example.csv, or TRAJECTORY.
-  --mode <relative|absolute>      Replay mode. Default: relative, or REPLAY_MODE.
-  --speed-scale <value>           Speed scale in (0, 1]. Default: 0.2, or SPEED_SCALE.
-  --max-translation-speed <m/s>   Max Cartesian translation speed. Default: 0.03, or MAX_TRANSLATION_SPEED.
-  --max-translation-acceleration <m/s^2> Max Cartesian translation acceleration. Default: 0.01, or MAX_TRANSLATION_ACCELERATION.
-  --max-rotation-speed <rad/s>    Max Cartesian rotation speed. Default: 0.35, or MAX_ROTATION_SPEED.
-  --max-rotation-acceleration <rad/s^2> Max Cartesian rotation acceleration. Default: 0.1, or MAX_ROTATION_ACCELERATION.
-  --ramp-time <s>                 Startup ramp time. Default: 2.0, or RAMP_TIME.
-  --bspline-smoothing-factor <value> B-spline waypoint smoothing factor. Default: 0.0016, or BSPLINE_SMOOTHING_FACTOR.
+  --interpolator <quintic|bspline> Replay executable to launch. Overrides REPLAY_INTERPOLATOR.
+  --trajectory <csv>              Replay CSV path. Overrides TRAJECTORY.
+  --mode <relative|absolute>      Replay mode. Overrides REPLAY_MODE.
+  --speed-scale <value>           Speed scale in (0, 1]. Overrides SPEED_SCALE.
+  --max-translation-speed <m/s>   Max Cartesian translation speed. Overrides MAX_TRANSLATION_SPEED.
+  --max-translation-acceleration <m/s^2> Max Cartesian translation acceleration. Overrides MAX_TRANSLATION_ACCELERATION.
+  --max-rotation-speed <rad/s>    Max Cartesian rotation speed. Overrides MAX_ROTATION_SPEED.
+  --max-rotation-acceleration <rad/s^2> Max Cartesian rotation acceleration. Overrides MAX_ROTATION_ACCELERATION.
+  --ramp-time <s>                 Startup ramp time. Overrides RAMP_TIME.
+  --bspline-smoothing-factor <value> B-spline waypoint smoothing factor. Overrides BSPLINE_SMOOTHING_FACTOR.
   --hold-at-end                   Keep commanding the final pose instead of exiting.
   --enable-force-correction       Enable experimental force correction.
   -h, --help                      Show this help.
@@ -42,10 +42,14 @@ Environment overrides:
   HOLD_AT_END                     1 to keep commanding the final pose
   ENABLE_FORCE_CORRECTION         1 to enable force correction
 
+Defaults:
+  Replay parameters are defined in config/replay_launch.conf. Command-line
+  options override that file for a single run.
+
 Examples:
-  $(basename "$0") --robot-ip 172.16.0.2
-  $(basename "$0") --robot-ip 172.16.0.2 --interpolator bspline
-  TRAJECTORY=/data/session_0001/franka_replay/replay_trajectory.csv $(basename "$0") --robot-ip 172.16.0.2 --speed-scale 0.1
+  $(basename "$0")
+  $(basename "$0") --interpolator bspline
+  $(basename "$0") --trajectory /data/session_0001/franka_replay/replay_trajectory.csv --speed-scale 0.1
 EOF
 }
 
@@ -65,27 +69,12 @@ done
 if [[ -f "${CONFIG_FILE}" ]]; then
   # shellcheck source=/dev/null
   source "${CONFIG_FILE}"
+else
+  echo "[WARN] Launch config not found: ${CONFIG_FILE}" >&2
 fi
 
 BUILD_DIR="${BUILD_DIR:-${SCRIPT_DIR}/build}"
-ROBOT_IP="${ROBOT_IP:-172.16.0.2}"
-REPLAY_INTERPOLATOR="${REPLAY_INTERPOLATOR:-bspline}"
-TRAJECTORY="${TRAJECTORY:-${SCRIPT_DIR}/config/replay_example.csv}"
-REPLAY_MODE="${REPLAY_MODE:-relative}"
-SPEED_SCALE="${SPEED_SCALE:-1.0}"
-MAX_TRANSLATION_SPEED="${MAX_TRANSLATION_SPEED:-0.2}"
-MAX_TRANSLATION_ACCELERATION="${MAX_TRANSLATION_ACCELERATION:-0.07}"
-MAX_ROTATION_SPEED="${MAX_ROTATION_SPEED:-0.35}"
-MAX_ROTATION_ACCELERATION="${MAX_ROTATION_ACCELERATION:-0.5}"
-RAMP_TIME="${RAMP_TIME:-3.0}"
-BSPLINE_SMOOTHING_FACTOR="${BSPLINE_SMOOTHING_FACTOR:-0.0016}"
-HOLD_AT_END="${HOLD_AT_END:-1}"
-ENABLE_FORCE_CORRECTION="${ENABLE_FORCE_CORRECTION:-0}"
 EXTRA_ARGS=()
-
-if [[ "${TRAJECTORY}" != /* ]]; then
-  TRAJECTORY="${SCRIPT_DIR}/${TRAJECTORY}"
-fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -160,6 +149,33 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+required_vars=(
+  ROBOT_IP
+  REPLAY_INTERPOLATOR
+  TRAJECTORY
+  REPLAY_MODE
+  SPEED_SCALE
+  MAX_TRANSLATION_SPEED
+  MAX_TRANSLATION_ACCELERATION
+  MAX_ROTATION_SPEED
+  MAX_ROTATION_ACCELERATION
+  RAMP_TIME
+  HOLD_AT_END
+  ENABLE_FORCE_CORRECTION
+)
+
+for var_name in "${required_vars[@]}"; do
+  if [[ -z "${!var_name:-}" ]]; then
+    echo "[ERROR] Missing ${var_name}. Set it in ${CONFIG_FILE}, environment, or command line." >&2
+    exit 1
+  fi
+done
+
+if [[ "${REPLAY_INTERPOLATOR}" == "bspline" && -z "${BSPLINE_SMOOTHING_FACTOR:-}" ]]; then
+  echo "[ERROR] Missing BSPLINE_SMOOTHING_FACTOR. Set it in ${CONFIG_FILE}, environment, or --bspline-smoothing-factor." >&2
+  exit 1
+fi
 
 if [[ "${TRAJECTORY}" != /* ]]; then
   TRAJECTORY="${SCRIPT_DIR}/${TRAJECTORY}"

@@ -106,21 +106,8 @@ Vec3 operator*(const Vec3& v, double s) {
   return Vec3{v.x * s, v.y * s, v.z * s};
 }
 
-Vec3 operator/(const Vec3& v, double s) {
-  return Vec3{v.x / s, v.y / s, v.z / s};
-}
-
 double Norm(const Vec3& v) {
   return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-template <std::size_t N>
-double MaxAbs(const std::array<double, N>& values) {
-  double result = 0.0;
-  for (double value : values) {
-    result = std::max(result, std::fabs(value));
-  }
-  return result;
 }
 
 Vec3 LimitVectorNorm(const Vec3& v, double max_norm) {

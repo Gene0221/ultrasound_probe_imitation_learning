@@ -88,13 +88,6 @@ double Smoothstep(double value) {
   return x * x * (3.0 - 2.0 * x);
 }
 
-double QuinticTimeScaling(double value) {
-  const double x = Clamp(value, 0.0, 1.0);
-  const double x2 = x * x;
-  const double x3 = x2 * x;
-  return 10.0 * x3 - 15.0 * x3 * x + 6.0 * x3 * x2;
-}
-
 std::array<double, 4> CubicBsplineBasis(double value) {
   const double u = Clamp(value, 0.0, 1.0);
   const double u2 = u * u;
@@ -119,21 +112,8 @@ Vec3 operator*(const Vec3& v, double s) {
   return Vec3{v.x * s, v.y * s, v.z * s};
 }
 
-Vec3 operator/(const Vec3& v, double s) {
-  return Vec3{v.x / s, v.y / s, v.z / s};
-}
-
 double Norm(const Vec3& v) {
   return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-template <std::size_t N>
-double MaxAbs(const std::array<double, N>& values) {
-  double result = 0.0;
-  for (double value : values) {
-    result = std::max(result, std::fabs(value));
-  }
-  return result;
 }
 
 Vec3 LimitVectorNorm(const Vec3& v, double max_norm) {
@@ -167,36 +147,6 @@ Quaternion Multiply(const Quaternion& a, const Quaternion& b) {
 
 double Dot(const Quaternion& a, const Quaternion& b) {
   return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
-}
-
-Quaternion Slerp(Quaternion a, Quaternion b, double t) {
-  a = Normalize(a);
-  b = Normalize(b);
-  double cos_theta = Dot(a, b);
-  if (cos_theta < 0.0) {
-    b = Quaternion{-b.x, -b.y, -b.z, -b.w};
-    cos_theta = -cos_theta;
-  }
-
-  if (cos_theta > 0.9995) {
-    return Normalize(Quaternion{
-        a.x + t * (b.x - a.x),
-        a.y + t * (b.y - a.y),
-        a.z + t * (b.z - a.z),
-        a.w + t * (b.w - a.w),
-    });
-  }
-
-  const double theta = std::acos(Clamp(cos_theta, -1.0, 1.0));
-  const double sin_theta = std::sin(theta);
-  const double w1 = std::sin((1.0 - t) * theta) / sin_theta;
-  const double w2 = std::sin(t * theta) / sin_theta;
-  return Normalize(Quaternion{
-      a.x * w1 + b.x * w2,
-      a.y * w1 + b.y * w2,
-      a.z * w1 + b.z * w2,
-      a.w * w1 + b.w * w2,
-  });
 }
 
 double QuaternionAngle(const Quaternion& a, const Quaternion& b) {
