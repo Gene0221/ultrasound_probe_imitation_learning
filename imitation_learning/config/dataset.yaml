@@ -1,9 +1,9 @@
 input:
-  session_root: E:/research_data/rotate/output
+  session_root: /media/scupi-r/KESU1/research_data/rotate/output
   session_prefix: session_
 
 output:
-  dataset_root: E:/research_data/training_datasets/ultrasound_pose_h20
+  dataset_root: /media/scupi-r/KESU1/research_data/rotate/training_datasets
 
 session_layout:
   ultrasound_subdir: ultrasound
