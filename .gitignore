@@ -74,9 +74,11 @@ events.out.tfevents*
 *.rar
 *.bundle
 
-# Common dataset directories
-data/
-datasets/
+# Common dataset directories at repository root
+/data/
+/datasets/
+!/imitation_learning/src/ultrasound_imitation/data/
+!/imitation_learning/src/ultrasound_imitation/data/**
 
 # Project runtime artifacts
 imitation_learning_infer/trajectory_replay/analysis/
