@@ -97,7 +97,7 @@ Python sender only:
 Robot-free realtime inference test:
 
 ```bash
-python test_realtime_inference.py --image-dir /path/to/images
+python test_realtime_inference.py
 ```
 
 This launches no C++ controller and sends nothing to the robot. It loads the
@@ -107,6 +107,12 @@ and writes replay-readable CSV files to `dry_run.output_dir` in `config/infer.ya
 By default one image frame produces the full 20-step action chunk as
 `replay_trajectory.csv`; `replay_trajectory_raw.csv` keeps the unfiltered
 cumulative trajectory.
+
+For offline debugging with saved images, explicitly pass `--image-dir`:
+
+```bash
+python test_realtime_inference.py --image-dir /path/to/images
+```
 
 For a sender-only dry run:
 

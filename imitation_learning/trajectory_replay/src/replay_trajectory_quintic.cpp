@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cmath>
 #include <csignal>
+#include <cstddef>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -104,6 +105,10 @@ Vec3 operator-(const Vec3& a, const Vec3& b) {
 
 Vec3 operator*(const Vec3& v, double s) {
   return Vec3{v.x * s, v.y * s, v.z * s};
+}
+
+Vec3 operator/(const Vec3& v, double s) {
+  return Vec3{v.x / s, v.y / s, v.z / s};
 }
 
 double Norm(const Vec3& v) {

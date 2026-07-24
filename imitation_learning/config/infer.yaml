@@ -51,7 +51,7 @@ dry_run:
     zero_phase: false
 
 ultrasound:
-  source: image_folder # image_folder or live_camera
+  source: live_camera # live_camera or image_folder
   image_dir:
   live_config: ../data_collection/ultrasound_image_collection/config/default.yaml
 
