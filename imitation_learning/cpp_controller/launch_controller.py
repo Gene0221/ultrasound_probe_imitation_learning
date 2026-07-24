@@ -24,7 +24,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Launch the realtime libfranka rolling policy controller.")
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "infer.yaml"))
-    parser.add_argument("--robot-ip", required=True)
+    parser.add_argument("--robot-ip", default=None, help="Override franka.robot_ip from config.")
     parser.add_argument("--binary", default=str(CONTROLLER_ROOT / "build" / "rolling_policy_controller"))
     parser.add_argument("--print-only", action="store_true", help="Print the command without executing it.")
     return parser.parse_args()
@@ -41,8 +41,12 @@ def main() -> None:
     motion = config.get("motion", {})
     limits = motion.get("limits", {})
     online_filter = motion.get("online_filter", {})
+    franka = config.get("franka", {})
+    robot_ip = args.robot_ip or franka.get("robot_ip")
+    if not robot_ip:
+        raise ValueError("Robot IP is required. Set franka.robot_ip in config or pass --robot-ip.")
 
-    command = [str(Path(args.binary).resolve()), "--robot-ip", args.robot_ip]
+    command = [str(Path(args.binary).resolve()), "--robot-ip", robot_ip]
     add_flag(command, "--host", runtime.get("host", "127.0.0.1"))
     add_flag(command, "--port", int(runtime.get("port", 50555)))
     add_flag(command, "--receive-timeout-ms", int(runtime.get("receive_timeout_ms", 150)))

@@ -24,6 +24,7 @@ class ImageFolderUltrasoundSource(UltrasoundSource):
         )
         if not self.paths:
             raise FileNotFoundError(f"No ultrasound images found in {self.image_dir}")
+        print(f"[INFO] Ultrasound source: image_folder dir={self.image_dir} frames={len(self.paths)}")
 
     def frames(self) -> Iterator[Image.Image]:
         while True:
@@ -43,7 +44,7 @@ class LiveCameraUltrasoundSource(UltrasoundSource):
         self.config = load_config(self.config_path)
         self.device_info = resolve_device(self.config)
         self.capture = open_capture(self.device_info.device, self.config.get("capture", {}))
-        print(f"[INFO] Opened ultrasound camera: {self.device_info.device}")
+        print(f"[INFO] Ultrasound source: live_camera device={self.device_info.device}")
 
     def frames(self) -> Iterator[Image.Image]:
         try:

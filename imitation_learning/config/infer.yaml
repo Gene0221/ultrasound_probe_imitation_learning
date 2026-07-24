@@ -36,6 +36,19 @@ runtime:
   reconnect_delay_s: 1.0
   send_timeout_s: 0.2
   receive_timeout_ms: 150
+  start_signal_file: runtime/start_policy_stream.flag
+
+franka:
+  robot_ip: 172.16.0.2
+
+dry_run:
+  chunks: 1
+  output_dir: runtime/inference_test
+  output_file: replay_trajectory.csv
+  raw_output_file: replay_trajectory_raw.csv
+  write_raw_copy: true
+  filter:
+    zero_phase: false
 
 ultrasound:
   source: image_folder # image_folder or live_camera

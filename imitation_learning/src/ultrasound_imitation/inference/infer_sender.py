@@ -17,6 +17,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run realtime ultrasound policy inference and stream action chunks.")
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config" / "infer.yaml"))
     parser.add_argument("--image-dir", default=None, help="Override config and use an image-folder source for dry runs.")
+    parser.add_argument("--wait-for-start", action="store_true", help="Wait for a start-signal file before streaming actions.")
+    parser.add_argument("--start-signal-file", default=None, help="Path to the start-signal file.")
     return parser.parse_args()
 
 
@@ -71,26 +73,64 @@ def build_source(args: argparse.Namespace, config: dict[str, Any]):
     return ImageFolderUltrasoundSource(Path(args.image_dir))
 
 
+def wait_for_start_signal(path: Path) -> None:
+    print(f"[INFO] Waiting for start signal: {path}", flush=True)
+    while not path.exists():
+        time.sleep(0.1)
+    print("[INFO] Start signal received. Streaming policy actions.", flush=True)
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
-    policy = PolicyRunner(config)
-    source = build_source(args, config)
-    force_monitor = ForceSafetyMonitor(config.get("force_safety", {}))
-
     runtime = config["runtime"]
     motion = config["motion"]
+    policy_cfg = config["policy"]
+    force_cfg = config.get("force_safety", {})
+
+    print(f"[INFO] Config: {Path(args.config).resolve()}", flush=True)
+    print(
+        f"[INFO] Policy: type={policy_cfg.get('type')} model_dir={policy_cfg.get('model_dir')} "
+        f"checkpoint={policy_cfg.get('checkpoint_name')} version={policy_cfg.get('dataset_version')}",
+        flush=True,
+    )
+    policy = PolicyRunner(config)
+    print("[INFO] Policy loaded and set to eval mode.", flush=True)
+
+    source = build_source(args, config)
+    frame_iter = source.frames()
+    first_image = next(frame_iter)
+    print(f"[INFO] Ultrasound video stream ready: first_frame_size={first_image.size}", flush=True)
+
+    force_monitor = ForceSafetyMonitor(force_cfg)
+    print(
+        f"[INFO] Force safety: enabled={force_cfg.get('enabled', False)} reader={force_cfg.get('reader', 'placeholder')}",
+        flush=True,
+    )
+
     client = JsonLineClient(
         str(runtime.get("host", "127.0.0.1")),
         int(runtime.get("port", 50555)),
         float(runtime.get("send_timeout_s", 0.2)),
         float(runtime.get("reconnect_delay_s", 1.0)),
     )
+    client.connect()
+
+    wait_enabled = bool(args.wait_for_start)
+    start_signal_value = args.start_signal_file or runtime.get("start_signal_file", "runtime/start_policy_stream.flag")
+    from ultrasound_imitation.paths import resolve_path
+
+    start_signal_file = resolve_path(str(start_signal_value))
+    if wait_enabled:
+        wait_for_start_signal(start_signal_file)
 
     period_s = 1.0 / max(float(runtime.get("camera_hz", 30.0)), 1e-6)
     seq = 0
-    for image in source.frames():
+    pending_image = first_image
+    while True:
         loop_start = time.monotonic()
+        image = pending_image
+        pending_image = next(frame_iter)
         actions = policy.predict(image)
         force_sample = force_monitor.read()
         force_ok = force_monitor.check(force_sample)

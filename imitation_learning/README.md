@@ -69,19 +69,44 @@ include `model_state_dict`, `config`, and training history.
 
 ## Realtime Inference
 
-Start the C++ Franka controller first:
-
-```bash
-cd imitation_learning/cpp_controller
-./launch.bash --robot-ip 172.16.0.2 --build
-```
-
-Then start the Python policy sender:
+One-command full realtime launch:
 
 ```bash
 cd imitation_learning
-python scripts/infer_sender.py --config config/infer.yaml
+./launch_realtime.bash --build
 ```
+
+This starts the Python policy sender, verifies that the model and ultrasound
+video stream are ready, starts the C++ controller, waits for the TCP connection,
+and only begins streaming robot motion after you press Enter. The Franka IP
+defaults to `franka.robot_ip` in `config/infer.yaml`.
+
+You can still launch either side separately from the root script when debugging:
+
+```bash
+cd imitation_learning
+./launch_realtime.bash --controller-only --build
+```
+
+Python sender only:
+
+```bash
+./launch_realtime.bash --sender-only
+```
+
+Robot-free realtime inference test:
+
+```bash
+python test_realtime_inference.py --image-dir /path/to/images
+```
+
+This launches no C++ controller and sends nothing to the robot. It loads the
+policy, validates the ultrasound video stream, waits for Enter, runs policy
+inference on the current frame, prints the filtered relative pose trajectory,
+and writes replay-readable CSV files to `dry_run.output_dir` in `config/infer.yaml`.
+By default one image frame produces the full 20-step action chunk as
+`replay_trajectory.csv`; `replay_trajectory_raw.csv` keeps the unfiltered
+cumulative trajectory.
 
 For a sender-only dry run:
 
@@ -93,5 +118,4 @@ python scripts/infer_sender.py --config config/infer.yaml --image-dir /path/to/i
 ## Legacy Workspaces
 
 The old `imitation_learning_ACT`, `imitation_learning_difussion`, and
-`imitation_learning_infer` directories are left in place for compatibility
-while this unified workspace is validated.
+`imitation_learning_infer` workspaces have been folded into this directory.

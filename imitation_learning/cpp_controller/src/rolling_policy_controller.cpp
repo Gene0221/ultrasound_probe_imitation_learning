@@ -113,6 +113,30 @@ struct Options {
   double orientation_filter_cutoff_hz = 1.0;
 };
 
+enum class ControllerMode {
+  kWaitingForPolicy,
+  kRunning,
+  kHoldTimeout,
+  kHoldForceLimit,
+  kHoldStopRequested,
+};
+
+const char* ModeName(ControllerMode mode) {
+  switch (mode) {
+    case ControllerMode::kWaitingForPolicy:
+      return "WAIT_FOR_POLICY";
+    case ControllerMode::kRunning:
+      return "RUNNING";
+    case ControllerMode::kHoldTimeout:
+      return "HOLD_TIMEOUT";
+    case ControllerMode::kHoldForceLimit:
+      return "HOLD_FORCE_LIMIT";
+    case ControllerMode::kHoldStopRequested:
+      return "HOLD_STOP_REQUESTED";
+  }
+  return "UNKNOWN";
+}
+
 double Clamp(double value, double lo, double hi) {
   return std::max(lo, std::min(value, hi));
 }
@@ -587,6 +611,7 @@ class LineServer {
   void ReadClient(int client_fd, const Options& opt, SharedPolicyState& state) {
     std::string buffer;
     std::array<char, 4096> chunk{};
+    bool first_chunk_logged = false;
     while (!g_stop_requested.load()) {
       const ssize_t count = ::recv(client_fd, chunk.data(), chunk.size(), 0);
       if (count <= 0) {
@@ -602,8 +627,17 @@ class LineServer {
         }
         try {
           PolicyChunk parsed = ParsePolicyChunk(line, opt);
+          const long long seq = parsed.seq;
+          const std::size_t action_count = parsed.actions.size();
+          const bool force_ok = parsed.force_safety_ok;
           std::lock_guard<std::mutex> lock(state.mutex);
           state.latest = std::move(parsed);
+          if (!first_chunk_logged) {
+            std::cout << "[INFO] First policy chunk received: seq=" << seq
+                      << " actions=" << action_count
+                      << " force_ok=" << (force_ok ? "true" : "false") << "\n";
+            first_chunk_logged = true;
+          }
         } catch (const std::exception& e) {
           std::cerr << "[WARN] Dropped invalid policy chunk: " << e.what() << "\n";
         }
@@ -739,6 +773,7 @@ int main(int argc, char** argv) {
     Vec3 commanded_angular_velocity{0.0, 0.0, 0.0};
     std::vector<TrajectorySample> active_trajectory{TrajectorySample{0.0, commanded_pose}};
     long long active_seq = -1;
+    ControllerMode current_mode = ControllerMode::kWaitingForPolicy;
     double trajectory_elapsed_s = 0.0;
     double control_elapsed_s = 0.0;
 
@@ -754,17 +789,33 @@ int main(int argc, char** argv) {
         latest = shared_state->latest;
       }
 
+      ControllerMode next_mode = ControllerMode::kWaitingForPolicy;
       bool hold_position = g_stop_requested.load();
       if (latest.has_value()) {
         const double age_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - latest->received_at).count();
-        hold_position = hold_position || age_s > opt.receive_timeout_s || !latest->force_safety_ok;
+        if (g_stop_requested.load()) {
+          next_mode = ControllerMode::kHoldStopRequested;
+        } else if (age_s > opt.receive_timeout_s) {
+          next_mode = ControllerMode::kHoldTimeout;
+        } else if (!latest->force_safety_ok) {
+          next_mode = ControllerMode::kHoldForceLimit;
+        } else {
+          next_mode = ControllerMode::kRunning;
+        }
+        hold_position = next_mode != ControllerMode::kRunning;
         if (!hold_position && latest->seq != active_seq) {
           active_trajectory = BuildTrajectory(commanded_pose, *latest, opt);
           active_seq = latest->seq;
           trajectory_elapsed_s = 0.0;
         }
       } else {
+        next_mode = g_stop_requested.load() ? ControllerMode::kHoldStopRequested : ControllerMode::kWaitingForPolicy;
         hold_position = true;
+      }
+      if (next_mode != current_mode) {
+        std::cout << "[INFO] Controller state: " << ModeName(current_mode)
+                  << " -> " << ModeName(next_mode) << "\n";
+        current_mode = next_mode;
       }
 
       Pose target_pose = commanded_pose;
