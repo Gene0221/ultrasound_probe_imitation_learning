@@ -34,13 +34,48 @@ def add_flag(command: list[str], name: str, value: Any) -> None:
     command.extend([name, str(value)])
 
 
+def active_policy_config(config: dict[str, Any]) -> dict[str, Any]:
+    policy = config.get("policy", {})
+    if not isinstance(policy, dict):
+        return {}
+    policy_type = str(policy.get("type", "act")).lower()
+    typed = policy.get(policy_type)
+    if isinstance(typed, dict):
+        merged = {key: value for key, value in policy.items() if key not in {"act", "diffusion"}}
+        merged.update(typed)
+        return merged
+    return policy
+
+
+def policy_type(config: dict[str, Any]) -> str:
+    policy = config.get("policy", {})
+    if not isinstance(policy, dict):
+        return "act"
+    return str(policy.get("type", "act")).lower()
+
+
+def active_motion_config(config: dict[str, Any], selected_policy_type: str) -> dict[str, Any]:
+    motion = config.get("motion", {})
+    if not isinstance(motion, dict):
+        return {}
+    typed = motion.get(selected_policy_type)
+    if isinstance(typed, dict):
+        merged = {key: value for key, value in motion.items() if key not in {"act", "diffusion"}}
+        merged.update(typed)
+        return merged
+    return motion
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     runtime = config.get("runtime", {})
-    motion = config.get("motion", {})
+    selected_policy_type = policy_type(config)
+    motion = active_motion_config(config, selected_policy_type)
     limits = motion.get("limits", {})
     online_filter = motion.get("online_filter", {})
+    calibration = config.get("calibration", {})
+    policy_cfg = active_policy_config(config)
     franka = config.get("franka", {})
     robot_ip = args.robot_ip or franka.get("robot_ip")
     if not robot_ip:
@@ -50,7 +85,7 @@ def main() -> None:
     add_flag(command, "--host", runtime.get("host", "127.0.0.1"))
     add_flag(command, "--port", int(runtime.get("port", 50555)))
     add_flag(command, "--receive-timeout-ms", int(runtime.get("receive_timeout_ms", 150)))
-    add_flag(command, "--action-horizon", int(motion.get("action_horizon", config.get("policy", {}).get("action_horizon", 20))))
+    add_flag(command, "--action-horizon", int(motion.get("action_horizon", policy_cfg.get("action_horizon", 20))))
     add_flag(command, "--max-step-translation", limits.get("max_step_translation_m", 0.003))
     add_flag(command, "--max-step-rotation", limits.get("max_step_rotation_rad", 0.05))
     add_flag(command, "--max-translation-speed", limits.get("max_translation_speed_mps", 0.2))
@@ -67,6 +102,17 @@ def main() -> None:
         command.append("--disable-orientation-filter")
     else:
         add_flag(command, "--orientation-filter-cutoff-hz", online_filter.get("orientation_cutoff_hz", 1.0))
+
+    if bool(calibration.get("enabled", False)):
+        command.append("--enable-calibration")
+    add_flag(command, "--calibration-interval-inferences", calibration.get("interval_inferences", 3))
+    add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
+    add_flag(command, "--calibration-z-gain", calibration.get("z_correction_gain_m_per_N", 0.0002))
+    add_flag(command, "--calibration-z-sign", calibration.get("z_correction_sign", 1.0))
+    add_flag(command, "--calibration-max-z-step", calibration.get("max_z_step_m", 0.0005))
+    add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
+    add_flag(command, "--calibration-orientation-tolerance", calibration.get("orientation_tolerance_rad", 0.01))
+    add_flag(command, "--calibration-force-settle-cycles", calibration.get("force_settle_cycles", 3))
 
     print(" ".join(shlex.quote(item) for item in command))
     if not args.print_only:

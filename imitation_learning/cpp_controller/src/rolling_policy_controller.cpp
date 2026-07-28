@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -85,6 +86,8 @@ struct PolicyChunk {
   double speed_scale = 0.4;
   int execute_steps = 1;
   bool force_safety_ok = true;
+  bool has_fz = false;
+  double fz_N = 0.0;
   std::vector<Action> actions;
   std::chrono::steady_clock::time_point received_at = std::chrono::steady_clock::now();
 };
@@ -92,6 +95,10 @@ struct PolicyChunk {
 struct SharedPolicyState {
   std::mutex mutex;
   std::optional<PolicyChunk> latest;
+  std::optional<double> latest_fz_N;
+  std::optional<double> calibration_initial_fz_N;
+  bool calibration_requested = false;
+  long long calibration_seq = -1;
 };
 
 struct Options {
@@ -111,11 +118,21 @@ struct Options {
   double filter_cutoff_hz = 1.0;
   bool orientation_filter_enabled = true;
   double orientation_filter_cutoff_hz = 1.0;
+  bool calibration_enabled = false;
+  int calibration_interval_inferences = 3;
+  double calibration_force_tolerance = 0.5;
+  double calibration_z_gain = 0.0002;
+  double calibration_z_sign = 1.0;
+  double calibration_max_z_step = 0.0005;
+  double calibration_max_total_z = 0.01;
+  double calibration_orientation_tolerance = 0.01;
+  int calibration_force_settle_cycles = 3;
 };
 
 enum class ControllerMode {
   kWaitingForPolicy,
   kRunning,
+  kCalibrating,
   kHoldTimeout,
   kHoldForceLimit,
   kHoldStopRequested,
@@ -133,6 +150,8 @@ const char* ModeName(ControllerMode mode) {
       return "HOLD_FORCE_LIMIT";
     case ControllerMode::kHoldStopRequested:
       return "HOLD_STOP_REQUESTED";
+    case ControllerMode::kCalibrating:
+      return "CALIBRATING";
   }
   return "UNKNOWN";
 }
@@ -200,6 +219,23 @@ Quaternion Multiply(const Quaternion& a, const Quaternion& b) {
       a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
       a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
   });
+}
+
+Vec3 RotateVector(const Quaternion& q, const Vec3& v) {
+  const Quaternion unit = Normalize(q);
+  const Vec3 u{unit.x, unit.y, unit.z};
+  const double s = unit.w;
+  const Vec3 cross_uv{
+      u.y * v.z - u.z * v.y,
+      u.z * v.x - u.x * v.z,
+      u.x * v.y - u.y * v.x,
+  };
+  const Vec3 cross_u_cross{
+      u.y * cross_uv.z - u.z * cross_uv.y,
+      u.z * cross_uv.x - u.x * cross_uv.z,
+      u.x * cross_uv.y - u.y * cross_uv.x,
+  };
+  return v + cross_uv * (2.0 * s) + cross_u_cross * 2.0;
 }
 
 double Dot(const Quaternion& a, const Quaternion& b) {
@@ -526,6 +562,11 @@ PolicyChunk ParsePolicyChunk(const std::string& line, const Options& opt) {
   chunk.speed_scale = ParseNumberField(line, "speed_scale", 0.4);
   chunk.execute_steps = static_cast<int>(ParseNumberField(line, "execute_steps", 1.0));
   chunk.force_safety_ok = ParseBoolField(line, "force_safety_ok", true);
+  const double fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+  if (std::isfinite(fz)) {
+    chunk.has_fz = true;
+    chunk.fz_N = fz;
+  }
   chunk.received_at = std::chrono::steady_clock::now();
 
   const std::vector<double> values = ParseNumberArray(line, "actions");
@@ -626,11 +667,36 @@ class LineServer {
           continue;
         }
         try {
+          if (line.find("\"mode\":\"calibration\"") != std::string::npos) {
+            const double fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+            if (!std::isfinite(fz)) {
+              throw std::runtime_error("calibration message missing force.Fz_N");
+            }
+            const long long seq = static_cast<long long>(ParseNumberField(line, "seq", -1.0));
+            std::lock_guard<std::mutex> lock(state.mutex);
+            state.latest_fz_N = fz;
+            const double initial_fz =
+                ParseNumberField(line, "calibration_initial_force_N", std::numeric_limits<double>::quiet_NaN());
+            if (std::isfinite(initial_fz)) {
+              state.calibration_initial_fz_N = initial_fz;
+            }
+            state.calibration_requested = true;
+            state.calibration_seq = seq;
+            continue;
+          }
           PolicyChunk parsed = ParsePolicyChunk(line, opt);
           const long long seq = parsed.seq;
           const std::size_t action_count = parsed.actions.size();
           const bool force_ok = parsed.force_safety_ok;
           std::lock_guard<std::mutex> lock(state.mutex);
+          if (parsed.has_fz) {
+            state.latest_fz_N = parsed.fz_N;
+          }
+          const double initial_fz =
+              ParseNumberField(line, "calibration_initial_force_N", std::numeric_limits<double>::quiet_NaN());
+          if (std::isfinite(initial_fz)) {
+            state.calibration_initial_fz_N = initial_fz;
+          }
           state.latest = std::move(parsed);
           if (!first_chunk_logged) {
             std::cout << "[INFO] First policy chunk received: seq=" << seq
@@ -669,7 +735,16 @@ void PrintUsage(const char* argv0) {
       << "  --disable-filter\n"
       << "  --filter-cutoff-hz <hz>             Default: 1.0\n"
       << "  --disable-orientation-filter\n"
-      << "  --orientation-filter-cutoff-hz <hz> Default: 1.0\n";
+      << "  --orientation-filter-cutoff-hz <hz> Default: 1.0\n"
+      << "  --enable-calibration\n"
+      << "  --calibration-interval-inferences <n> Default: 3\n"
+      << "  --calibration-force-tolerance <N>   Default: 0.5\n"
+      << "  --calibration-z-gain <m/N>          Default: 0.0002\n"
+      << "  --calibration-z-sign <sign>         Default: 1.0\n"
+      << "  --calibration-max-z-step <m>        Default: 0.0005\n"
+      << "  --calibration-max-total-z <m>       Default: 0.01\n"
+      << "  --calibration-orientation-tolerance <rad> Default: 0.01\n"
+      << "  --calibration-force-settle-cycles <n> Default: 3\n";
 }
 
 Options ParseArgs(int argc, char** argv) {
@@ -715,6 +790,24 @@ Options ParseArgs(int argc, char** argv) {
       opt.orientation_filter_enabled = false;
     } else if (arg == "--orientation-filter-cutoff-hz") {
       opt.orientation_filter_cutoff_hz = std::stod(require_value(arg));
+    } else if (arg == "--enable-calibration") {
+      opt.calibration_enabled = true;
+    } else if (arg == "--calibration-interval-inferences") {
+      opt.calibration_interval_inferences = std::stoi(require_value(arg));
+    } else if (arg == "--calibration-force-tolerance") {
+      opt.calibration_force_tolerance = std::stod(require_value(arg));
+    } else if (arg == "--calibration-z-gain") {
+      opt.calibration_z_gain = std::stod(require_value(arg));
+    } else if (arg == "--calibration-z-sign") {
+      opt.calibration_z_sign = std::stod(require_value(arg));
+    } else if (arg == "--calibration-max-z-step") {
+      opt.calibration_max_z_step = std::stod(require_value(arg));
+    } else if (arg == "--calibration-max-total-z") {
+      opt.calibration_max_total_z = std::stod(require_value(arg));
+    } else if (arg == "--calibration-orientation-tolerance") {
+      opt.calibration_orientation_tolerance = std::stod(require_value(arg));
+    } else if (arg == "--calibration-force-settle-cycles") {
+      opt.calibration_force_settle_cycles = std::stoi(require_value(arg));
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -736,6 +829,14 @@ Options ParseArgs(int argc, char** argv) {
   }
   if (opt.filter_cutoff_hz <= 0.0 || opt.orientation_filter_cutoff_hz <= 0.0) {
     throw std::runtime_error("Filter cutoff values must be positive.");
+  }
+  if (opt.calibration_interval_inferences <= 0 || opt.calibration_force_settle_cycles <= 0) {
+    throw std::runtime_error("Calibration interval and settle cycles must be positive.");
+  }
+  if (opt.calibration_force_tolerance <= 0.0 || opt.calibration_z_gain < 0.0 ||
+      opt.calibration_max_z_step < 0.0 || opt.calibration_max_total_z < 0.0 ||
+      opt.calibration_orientation_tolerance < 0.0) {
+    throw std::runtime_error("Calibration numeric limits must be non-negative, and force tolerance must be positive.");
   }
   return opt;
 }
@@ -769,6 +870,7 @@ int main(int argc, char** argv) {
 
     const franka::RobotState initial_state = robot.readOnce();
     Pose commanded_pose = MatrixToPose(ArrayToMatrix(initial_state.O_T_EE_c));
+    const Quaternion initial_orientation = commanded_pose.q;
     Vec3 commanded_velocity{0.0, 0.0, 0.0};
     Vec3 commanded_angular_velocity{0.0, 0.0, 0.0};
     std::vector<TrajectorySample> active_trajectory{TrajectorySample{0.0, commanded_pose}};
@@ -776,6 +878,17 @@ int main(int argc, char** argv) {
     ControllerMode current_mode = ControllerMode::kWaitingForPolicy;
     double trajectory_elapsed_s = 0.0;
     double control_elapsed_s = 0.0;
+    double waiting_for_next_chunk_s = 0.0;
+    std::optional<double> initial_fz_N;
+    bool calibration_in_progress = false;
+    int calibration_settled_cycles = 0;
+    double calibration_total_z = 0.0;
+
+    if (opt.calibration_enabled) {
+      std::cout << "[INFO] Calibration enabled. Initial EE orientation captured.\n";
+    } else {
+      std::cout << "[INFO] Calibration disabled.\n";
+    }
 
     std::cout << "[INFO] Realtime rolling controller started. Press Ctrl+C to stop.\n";
     robot.control([&](const franka::RobotState&, franka::Duration period) -> franka::CartesianPose {
@@ -784,33 +897,76 @@ int main(int argc, char** argv) {
       trajectory_elapsed_s += dt;
 
       std::optional<PolicyChunk> latest;
+      std::optional<double> latest_fz_N;
+      std::optional<double> calibration_initial_fz_N;
+      bool calibration_requested = false;
+      long long calibration_seq = -1;
       {
         std::lock_guard<std::mutex> lock(shared_state->mutex);
         latest = shared_state->latest;
+        latest_fz_N = shared_state->latest_fz_N;
+        calibration_initial_fz_N = shared_state->calibration_initial_fz_N;
+        calibration_requested = shared_state->calibration_requested;
+        calibration_seq = shared_state->calibration_seq;
+        shared_state->calibration_requested = false;
+      }
+
+      if (opt.calibration_enabled && !initial_fz_N.has_value() && calibration_initial_fz_N.has_value()) {
+        initial_fz_N = *calibration_initial_fz_N;
+        std::cout << "[INFO] Calibration force reference received by controller: Fz="
+                  << *initial_fz_N << " N\n";
+      }
+
+      if (opt.calibration_enabled && calibration_requested && initial_fz_N.has_value() && !calibration_in_progress) {
+        calibration_in_progress = true;
+        calibration_settled_cycles = 0;
+        active_trajectory = std::vector<TrajectorySample>{TrajectorySample{0.0, commanded_pose}};
+        trajectory_elapsed_s = 0.0;
+        std::cout << "[INFO] Calibration requested after policy seq=" << calibration_seq << "\n";
       }
 
       ControllerMode next_mode = ControllerMode::kWaitingForPolicy;
       bool hold_position = g_stop_requested.load();
+      const bool active_chunk_running =
+          active_seq >= 0 &&
+          !active_trajectory.empty() &&
+          trajectory_elapsed_s <= active_trajectory.back().time_s;
       if (latest.has_value()) {
-        const double age_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - latest->received_at).count();
         if (g_stop_requested.load()) {
           next_mode = ControllerMode::kHoldStopRequested;
-        } else if (age_s > opt.receive_timeout_s) {
-          next_mode = ControllerMode::kHoldTimeout;
+        } else if (calibration_in_progress) {
+          next_mode = ControllerMode::kCalibrating;
         } else if (!latest->force_safety_ok) {
           next_mode = ControllerMode::kHoldForceLimit;
-        } else {
-          next_mode = ControllerMode::kRunning;
-        }
-        hold_position = next_mode != ControllerMode::kRunning;
-        if (!hold_position && latest->seq != active_seq) {
+        } else if (latest->seq != active_seq && !active_chunk_running) {
           active_trajectory = BuildTrajectory(commanded_pose, *latest, opt);
           active_seq = latest->seq;
           trajectory_elapsed_s = 0.0;
+          next_mode = ControllerMode::kRunning;
+          std::cout << "[INFO] Activated policy chunk: seq=" << active_seq
+                    << " duration_s=" << active_trajectory.back().time_s
+                    << " samples=" << active_trajectory.size() << "\n";
+        } else if (active_chunk_running) {
+          next_mode = ControllerMode::kRunning;
+        } else if (active_seq >= 0 && waiting_for_next_chunk_s > opt.receive_timeout_s) {
+          next_mode = ControllerMode::kHoldTimeout;
+        } else {
+          next_mode = ControllerMode::kWaitingForPolicy;
         }
       } else {
-        next_mode = g_stop_requested.load() ? ControllerMode::kHoldStopRequested : ControllerMode::kWaitingForPolicy;
-        hold_position = true;
+        if (g_stop_requested.load()) {
+          next_mode = ControllerMode::kHoldStopRequested;
+        } else if (calibration_in_progress) {
+          next_mode = ControllerMode::kCalibrating;
+        } else {
+          next_mode = ControllerMode::kWaitingForPolicy;
+        }
+      }
+      hold_position = next_mode != ControllerMode::kRunning && next_mode != ControllerMode::kCalibrating;
+      if (next_mode == ControllerMode::kRunning || next_mode == ControllerMode::kCalibrating || active_chunk_running) {
+        waiting_for_next_chunk_s = 0.0;
+      } else if (active_seq >= 0) {
+        waiting_for_next_chunk_s += dt;
       }
       if (next_mode != current_mode) {
         std::cout << "[INFO] Controller state: " << ModeName(current_mode)
@@ -819,7 +975,45 @@ int main(int argc, char** argv) {
       }
 
       Pose target_pose = commanded_pose;
-      if (!hold_position && !active_trajectory.empty()) {
+      if (next_mode == ControllerMode::kCalibrating) {
+        target_pose.q = initial_orientation;
+        double force_error = 0.0;
+        bool force_in_range = false;
+        if (initial_fz_N.has_value() && latest_fz_N.has_value()) {
+          force_error = *latest_fz_N - *initial_fz_N;
+          force_in_range = std::fabs(force_error) <= opt.calibration_force_tolerance;
+          if (!force_in_range) {
+            double z_step = opt.calibration_z_sign * (-force_error) * opt.calibration_z_gain;
+            z_step = Clamp(z_step, -opt.calibration_max_z_step, opt.calibration_max_z_step);
+            const double requested_total = calibration_total_z + z_step;
+            const double clamped_total = Clamp(
+                requested_total,
+                -opt.calibration_max_total_z,
+                opt.calibration_max_total_z);
+            z_step = clamped_total - calibration_total_z;
+            calibration_total_z = clamped_total;
+            const Vec3 ee_z_axis = RotateVector(commanded_pose.q, Vec3{0.0, 0.0, 1.0});
+            target_pose.p = commanded_pose.p + ee_z_axis * z_step;
+          }
+        }
+
+        const Quaternion orientation_error_q = Multiply(initial_orientation, Conjugate(commanded_pose.q));
+        const bool orientation_in_range =
+            QuaternionAngle(orientation_error_q) <= opt.calibration_orientation_tolerance;
+        if (force_in_range && orientation_in_range) {
+          calibration_settled_cycles += 1;
+        } else {
+          calibration_settled_cycles = 0;
+        }
+        if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {
+          calibration_in_progress = false;
+          calibration_settled_cycles = 0;
+          active_trajectory = std::vector<TrajectorySample>{TrajectorySample{0.0, commanded_pose}};
+          trajectory_elapsed_s = 0.0;
+          std::cout << "[INFO] Calibration complete: Fz_error=" << force_error
+                    << " N total_z_correction=" << calibration_total_z << " m\n";
+        }
+      } else if (!hold_position && !active_trajectory.empty()) {
         target_pose = Interpolate(active_trajectory, trajectory_elapsed_s).pose;
         if (trajectory_elapsed_s > active_trajectory.back().time_s) {
           target_pose = commanded_pose;

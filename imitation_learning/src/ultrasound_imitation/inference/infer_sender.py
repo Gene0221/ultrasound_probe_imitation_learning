@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from ultrasound_imitation.inference.force6d_monitor import ForceSafetyMonitor
-from ultrasound_imitation.inference.policy_loader import PolicyRunner
+from ultrasound_imitation.inference.policy_loader import PolicyRunner, active_motion_config, active_policy_config
 from ultrasound_imitation.inference.ultrasound_source import ImageFolderUltrasoundSource, LiveCameraUltrasoundSource
 from ultrasound_imitation.paths import PROJECT_ROOT, load_config
 
@@ -80,17 +80,48 @@ def wait_for_start_signal(path: Path) -> None:
     print("[INFO] Start signal received. Streaming policy actions.", flush=True)
 
 
+def read_force_axis(sample, axis: str) -> float:
+    values = sample.as_dict()
+    if axis not in values:
+        raise ValueError(f"Unsupported calibration.force_axis: {axis}")
+    return float(values[axis])
+
+
+def capture_initial_force(force_monitor: ForceSafetyMonitor, calibration_cfg: dict[str, Any]) -> float:
+    axis = str(calibration_cfg.get("force_axis", "Fz_N"))
+    samples_required = max(1, int(calibration_cfg.get("initial_force_samples", 5)))
+    timeout_s = float(calibration_cfg.get("initial_force_timeout_s", 3.0))
+    deadline = time.monotonic() + timeout_s
+    values: list[float] = []
+    while len(values) < samples_required and time.monotonic() < deadline:
+        values.append(read_force_axis(force_monitor.read(), axis))
+        time.sleep(0.01)
+    if len(values) < samples_required:
+        raise RuntimeError(
+            f"Calibration needs {samples_required} initial force samples, got {len(values)} within {timeout_s:.2f}s."
+        )
+    initial_force = sum(values) / len(values)
+    print(
+        f"[INFO] Calibration force reference captured: axis={axis} value={initial_force:.4f} N "
+        f"samples={len(values)}",
+        flush=True,
+    )
+    return initial_force
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     runtime = config["runtime"]
-    motion = config["motion"]
-    policy_cfg = config["policy"]
+    policy_type, policy_cfg = active_policy_config(config)
+    motion = active_motion_config(config, policy_type)
     force_cfg = config.get("force_safety", {})
+    calibration_cfg = config.get("calibration", {})
+    calibration_enabled = bool(calibration_cfg.get("enabled", False))
 
     print(f"[INFO] Config: {Path(args.config).resolve()}", flush=True)
     print(
-        f"[INFO] Policy: type={policy_cfg.get('type')} model_dir={policy_cfg.get('model_dir')} "
+        f"[INFO] Policy: type={policy_type} model_dir={policy_cfg.get('model_dir')} "
         f"checkpoint={policy_cfg.get('checkpoint_name')} version={policy_cfg.get('dataset_version')}",
         flush=True,
     )
@@ -107,6 +138,17 @@ def main() -> None:
         f"[INFO] Force safety: enabled={force_cfg.get('enabled', False)} reader={force_cfg.get('reader', 'placeholder')}",
         flush=True,
     )
+    initial_calibration_force: float | None = None
+    if calibration_enabled:
+        reader = str(force_cfg.get("reader", "placeholder")).lower()
+        if bool(calibration_cfg.get("require_force_reader", True)) and (
+            not bool(force_cfg.get("enabled", False)) or reader == "placeholder"
+        ):
+            raise RuntimeError("calibration.enabled=true requires a real enabled force_safety reader.")
+        initial_calibration_force = capture_initial_force(force_monitor, calibration_cfg)
+        print("[INFO] Calibration module enabled and force module loaded successfully.", flush=True)
+    else:
+        print("[INFO] Calibration module disabled.", flush=True)
 
     client = JsonLineClient(
         str(runtime.get("host", "127.0.0.1")),
@@ -125,6 +167,13 @@ def main() -> None:
         wait_for_start_signal(start_signal_file)
 
     period_s = 1.0 / max(float(runtime.get("camera_hz", 30.0)), 1e-6)
+    calibration_interval = max(1, int(calibration_cfg.get("interval_inferences", 3)))
+    calibration_axis = str(calibration_cfg.get("force_axis", "Fz_N"))
+    calibration_tolerance = float(calibration_cfg.get("force_tolerance_N", 0.5))
+    calibration_settle_cycles = max(1, int(calibration_cfg.get("force_settle_cycles", 3)))
+    calibration_telemetry_period_s = 1.0 / max(float(calibration_cfg.get("telemetry_hz", runtime.get("camera_hz", 30.0))), 1e-6)
+    calibration_min_telemetry_s = float(calibration_cfg.get("min_telemetry_s", 1.0))
+    calibration_timeout_s = float(calibration_cfg.get("telemetry_timeout_s", 5.0))
     seq = 0
     pending_image = first_image
     while True:
@@ -145,8 +194,36 @@ def main() -> None:
             "force_safety_ok": force_ok,
             "force": force_sample.as_dict(),
         }
+        if initial_calibration_force is not None:
+            payload["calibration_initial_force_N"] = initial_calibration_force
         client.send(payload)
         seq += 1
+        if calibration_enabled and seq % calibration_interval == 0:
+            assert initial_calibration_force is not None
+            print(f"[INFO] Calibration telemetry started after {seq} policy inferences.", flush=True)
+            settled = 0
+            calibration_start = time.monotonic()
+            while time.monotonic() - calibration_start < calibration_timeout_s:
+                force_sample = force_monitor.read()
+                force_value = read_force_axis(force_sample, calibration_axis)
+                force_error = force_value - initial_calibration_force
+                payload = {
+                    "seq": seq,
+                    "timestamp_s": time.time(),
+                    "mode": "calibration",
+                    "force": force_sample.as_dict(),
+                    "calibration_initial_force_N": initial_calibration_force,
+                    "calibration_force_error_N": force_error,
+                }
+                client.send(payload)
+                if abs(force_error) <= calibration_tolerance:
+                    settled += 1
+                    if settled >= calibration_settle_cycles and time.monotonic() - calibration_start >= calibration_min_telemetry_s:
+                        break
+                else:
+                    settled = 0
+                time.sleep(calibration_telemetry_period_s)
+            print(f"[INFO] Calibration telemetry finished: settled_cycles={settled}. Resuming inference.", flush=True)
         sleep_s = period_s - (time.monotonic() - loop_start)
         if sleep_s > 0.0:
             time.sleep(sleep_s)

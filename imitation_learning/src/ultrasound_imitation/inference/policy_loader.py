@@ -20,9 +20,34 @@ def build_transform(image_size: int):
     )
 
 
+def active_policy_config(config: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    policy_cfg = config["policy"]
+    policy_type = str(policy_cfg.get("type", "act")).lower()
+    typed_cfg = policy_cfg.get(policy_type)
+    if isinstance(typed_cfg, dict):
+        merged = {key: value for key, value in policy_cfg.items() if key not in {"act", "diffusion"}}
+        merged.update(typed_cfg)
+        return policy_type, merged
+    return policy_type, policy_cfg
+
+
+def active_motion_config(config: dict[str, Any], policy_type: str | None = None) -> dict[str, Any]:
+    if policy_type is None:
+        policy_type, _ = active_policy_config(config)
+    motion_cfg = config.get("motion", {})
+    if not isinstance(motion_cfg, dict):
+        return {}
+    typed_cfg = motion_cfg.get(policy_type)
+    if isinstance(typed_cfg, dict):
+        merged = {key: value for key, value in motion_cfg.items() if key not in {"act", "diffusion"}}
+        merged.update(typed_cfg)
+        return merged
+    return motion_cfg
+
+
 def merged_model_config(policy_cfg: dict[str, Any], train_config: dict[str, Any], key: str) -> dict[str, Any]:
     checkpoint_model_cfg = train_config.get("model", {}) if isinstance(train_config, dict) else {}
-    infer_model_cfg = policy_cfg.get(key, {})
+    infer_model_cfg = policy_cfg.get("model", policy_cfg.get(key, {}))
     if not isinstance(checkpoint_model_cfg, dict):
         checkpoint_model_cfg = {}
     if not isinstance(infer_model_cfg, dict):
@@ -34,7 +59,7 @@ def merged_model_config(policy_cfg: dict[str, Any], train_config: dict[str, Any]
 
 def merged_diffusion_config(policy_cfg: dict[str, Any], train_config: dict[str, Any]) -> dict[str, Any]:
     checkpoint_diffusion_cfg = train_config.get("diffusion", {}) if isinstance(train_config, dict) else {}
-    infer_diffusion_cfg = policy_cfg.get("diffusion", {})
+    infer_diffusion_cfg = policy_cfg.get("sampler", policy_cfg.get("diffusion", {}))
     if not isinstance(checkpoint_diffusion_cfg, dict):
         checkpoint_diffusion_cfg = {}
     if not isinstance(infer_diffusion_cfg, dict):
@@ -46,8 +71,7 @@ def merged_diffusion_config(policy_cfg: dict[str, Any], train_config: dict[str, 
 
 class PolicyRunner:
     def __init__(self, config: dict[str, Any]) -> None:
-        policy_cfg = config["policy"]
-        self.policy_type = str(policy_cfg.get("type", "act")).lower()
+        self.policy_type, policy_cfg = active_policy_config(config)
         self.image_size = int(policy_cfg.get("image_size", 224))
         self.action_horizon = int(policy_cfg.get("action_horizon", 20))
         self.action_dim = int(policy_cfg.get("action_dim", 7))

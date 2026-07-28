@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from ultrasound_imitation.inference.infer_sender import build_source
-from ultrasound_imitation.inference.policy_loader import PolicyRunner
+from ultrasound_imitation.inference.policy_loader import PolicyRunner, active_motion_config, active_policy_config
 from ultrasound_imitation.inference.replay_export import accumulate_action_chunks, apply_replay_filter, write_replay_csv
 from ultrasound_imitation.paths import PROJECT_ROOT, load_config, resolve_path
 
@@ -67,8 +67,8 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     dry_run = config.get("dry_run", {})
-    policy_cfg = config["policy"]
-    motion = config["motion"]
+    policy_type, policy_cfg = active_policy_config(config)
+    motion = active_motion_config(config, policy_type)
 
     chunks = args.chunks if args.chunks is not None else int(dry_run.get("chunks", 1))
     if chunks <= 0:
@@ -81,7 +81,7 @@ def main() -> None:
     print("[1/5] Loading realtime inference test config.", flush=True)
     print(f"[INFO] Config: {Path(args.config).resolve()}", flush=True)
     print(
-        f"[INFO] Policy: type={policy_cfg.get('type')} model_dir={policy_cfg.get('model_dir')} "
+        f"[INFO] Policy: type={policy_type} model_dir={policy_cfg.get('model_dir')} "
         f"checkpoint={policy_cfg.get('checkpoint_name')}",
         flush=True,
     )
