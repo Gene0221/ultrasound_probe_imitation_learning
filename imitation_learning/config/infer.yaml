@@ -1,7 +1,7 @@
 policy:
   type: act
   act:
-    model_dir: runs/act_pose_h20
+    model_dir: runs/without_force/act_pose_h20
     checkpoint_name: best.pt
     dataset_version: without_force
     use_force_condition: false
@@ -18,7 +18,7 @@ policy:
       dim_feedforward: 2048
       dropout: 0.1
   diffusion:
-    model_dir: runs/diffusion_pose_h20
+    model_dir: runs/without_force/diffusion_pose_h20
     checkpoint_name: best.pt
     dataset_version: without_force
     use_force_condition: false
@@ -138,7 +138,6 @@ force_safety:
 calibration:
   enabled: false
   interval_inferences: 3
-  require_force_reader: true
   force_axis: Fz_N
   force_tolerance_N: 0.5
   initial_force_samples: 5
@@ -152,6 +151,18 @@ calibration:
   telemetry_hz: 30.0
   min_telemetry_s: 1.0
   telemetry_timeout_s: 5.0
+  force_reader:
+    enabled: true
+    source: external_6d
+    reader: kwr75b_serial # placeholder or kwr75b_serial
+    sampling_hz: 30.0
+    serial:
+      port: AUTO
+      serial_number: AB0KU8NU
+      baudrate: 460800
+      request_mode: true
+      debug: false
+      bias_file: ../data_collection/6D_force_grasping/config/zero_bias.json
 
 franka_safety:
   enable_collision_behavior: true

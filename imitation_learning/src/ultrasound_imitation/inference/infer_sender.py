@@ -138,15 +138,21 @@ def main() -> None:
         f"[INFO] Force safety: enabled={force_cfg.get('enabled', False)} reader={force_cfg.get('reader', 'placeholder')}",
         flush=True,
     )
+    calibration_force_monitor: ForceSafetyMonitor | None = None
     initial_calibration_force: float | None = None
     if calibration_enabled:
-        reader = str(force_cfg.get("reader", "placeholder")).lower()
-        if bool(calibration_cfg.get("require_force_reader", True)) and (
-            not bool(force_cfg.get("enabled", False)) or reader == "placeholder"
-        ):
-            raise RuntimeError("calibration.enabled=true requires a real enabled force_safety reader.")
-        initial_calibration_force = capture_initial_force(force_monitor, calibration_cfg)
-        print("[INFO] Calibration module enabled and force module loaded successfully.", flush=True)
+        calibration_force_cfg = dict(calibration_cfg.get("force_reader", {}))
+        calibration_reader = str(calibration_force_cfg.get("reader", "placeholder")).lower()
+        if not bool(calibration_force_cfg.get("enabled", False)) or calibration_reader == "placeholder":
+            raise RuntimeError("calibration.enabled=true requires calibration.force_reader.enabled=true with a real reader.")
+        calibration_force_monitor = ForceSafetyMonitor(calibration_force_cfg)
+        print(
+            f"[INFO] Calibration force reader: enabled={calibration_force_cfg.get('enabled', False)} "
+            f"reader={calibration_force_cfg.get('reader', 'placeholder')}",
+            flush=True,
+        )
+        initial_calibration_force = capture_initial_force(calibration_force_monitor, calibration_cfg)
+        print("[INFO] Calibration module enabled and calibration force reader loaded successfully.", flush=True)
     else:
         print("[INFO] Calibration module disabled.", flush=True)
 
@@ -183,6 +189,7 @@ def main() -> None:
         actions = policy.predict(image)
         force_sample = force_monitor.read()
         force_ok = force_monitor.check(force_sample)
+        calibration_force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_sample
         payload = {
             "seq": seq,
             "timestamp_s": time.time(),
@@ -193,6 +200,8 @@ def main() -> None:
             "actions": actions,
             "force_safety_ok": force_ok,
             "force": force_sample.as_dict(),
+            "calibration_force": calibration_force_sample.as_dict(),
+            "calibration_Fz_N": read_force_axis(calibration_force_sample, calibration_axis),
         }
         if initial_calibration_force is not None:
             payload["calibration_initial_force_N"] = initial_calibration_force
@@ -205,13 +214,16 @@ def main() -> None:
             calibration_start = time.monotonic()
             while time.monotonic() - calibration_start < calibration_timeout_s:
                 force_sample = force_monitor.read()
-                force_value = read_force_axis(force_sample, calibration_axis)
+                calibration_force_sample = calibration_force_monitor.read()
+                force_value = read_force_axis(calibration_force_sample, calibration_axis)
                 force_error = force_value - initial_calibration_force
                 payload = {
                     "seq": seq,
                     "timestamp_s": time.time(),
                     "mode": "calibration",
                     "force": force_sample.as_dict(),
+                    "calibration_force": calibration_force_sample.as_dict(),
+                    "calibration_Fz_N": force_value,
                     "calibration_initial_force_N": initial_calibration_force,
                     "calibration_force_error_N": force_error,
                 }

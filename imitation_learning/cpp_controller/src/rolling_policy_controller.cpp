@@ -562,7 +562,10 @@ PolicyChunk ParsePolicyChunk(const std::string& line, const Options& opt) {
   chunk.speed_scale = ParseNumberField(line, "speed_scale", 0.4);
   chunk.execute_steps = static_cast<int>(ParseNumberField(line, "execute_steps", 1.0));
   chunk.force_safety_ok = ParseBoolField(line, "force_safety_ok", true);
-  const double fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+  double fz = ParseNumberField(line, "calibration_Fz_N", std::numeric_limits<double>::quiet_NaN());
+  if (!std::isfinite(fz)) {
+    fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+  }
   if (std::isfinite(fz)) {
     chunk.has_fz = true;
     chunk.fz_N = fz;
@@ -668,7 +671,10 @@ class LineServer {
         }
         try {
           if (line.find("\"mode\":\"calibration\"") != std::string::npos) {
-            const double fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+            double fz = ParseNumberField(line, "calibration_Fz_N", std::numeric_limits<double>::quiet_NaN());
+            if (!std::isfinite(fz)) {
+              fz = ParseNumberField(line, "Fz_N", std::numeric_limits<double>::quiet_NaN());
+            }
             if (!std::isfinite(fz)) {
               throw std::runtime_error("calibration message missing force.Fz_N");
             }
