@@ -52,7 +52,7 @@ class ForceSafetyMonitor:
         if str(scripts_root) not in sys.path:
             sys.path.insert(0, str(scripts_root))
         import serial
-        from kwr75b_common import load_bias, read_one_sample, resolve_port
+        from kwr75b_common import load_bias, read_one_sample, resolve_port, save_bias, tare_sensor
 
         config = {"serial": dict(serial_cfg)}
         port = resolve_port(config)
@@ -74,8 +74,12 @@ class ForceSafetyMonitor:
             "command": bytes([0x49, 0xAA, 0x0D, 0x0A]),
             "request_mode": bool(serial_cfg.get("request_mode", True)),
             "debug": bool(serial_cfg.get("debug", False)),
+            "sample_timeout_s": float(serial_cfg.get("sample_timeout_s", 0.5)),
             "bias": bias,
+            "bias_file": Path(bias_file),
             "read_one_sample": read_one_sample,
+            "save_bias": save_bias,
+            "tare_sensor": tare_sensor,
         }
 
     def _read_kwr75b(self) -> ForceSample:
@@ -88,6 +92,7 @@ class ForceSafetyMonitor:
             ctx["command"],
             ctx["request_mode"],
             debug=ctx["debug"],
+            timeout_s=ctx["sample_timeout_s"],
         )
         bias = ctx["bias"]
         zeroed = tuple(raw[i] - bias[i] for i in range(6))
@@ -100,6 +105,23 @@ class ForceSafetyMonitor:
             My_Nm=zeroed[4] * gravity,
             Mz_Nm=zeroed[5] * gravity,
         )
+
+    def tare(self, sample_count: int) -> tuple[float, float, float, float, float, float]:
+        if not self.enabled or self.reader != "kwr75b_serial" or self._serial_context is None:
+            raise RuntimeError("Tare requires an enabled kwr75b_serial force reader.")
+        ctx = self._serial_context
+        bias = ctx["tare_sensor"](
+            ctx["ser"],
+            ctx["buffer"],
+            ctx["command"],
+            ctx["request_mode"],
+            sample_count=max(1, int(sample_count)),
+            debug=ctx["debug"],
+            sample_timeout_s=ctx["sample_timeout_s"],
+        )
+        ctx["save_bias"](ctx["bias_file"], bias)
+        ctx["bias"] = bias
+        return bias
 
     def close(self) -> None:
         if self._serial_context is not None:

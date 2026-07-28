@@ -137,6 +137,11 @@ force_safety:
 
 calibration:
   enabled: true
+  initialization:
+    tare_enabled: true
+    tare_samples: 100
+    tare_settle_s: 1.0
+    prompt_for_contact: true
   interval_inferences: 3
   force_axis: Fz_N
   force_tolerance_N: 0.5
@@ -162,6 +167,7 @@ calibration:
       baudrate: 460800
       request_mode: true
       debug: false
+      sample_timeout_s: 0.5
       bias_file: ../data_collection/6D_force_grasping/config/zero_bias.json
 
 franka_safety:

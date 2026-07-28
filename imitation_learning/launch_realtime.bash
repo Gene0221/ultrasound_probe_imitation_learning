@@ -142,6 +142,11 @@ SENDER_CMD=(
   "${SCRIPT_DIR}/scripts/infer_sender.py"
   --config "${CONFIG_FILE}"
 )
+CALIBRATION_INITIALIZER_CMD=(
+  "${PYTHON:-python}"
+  "${SCRIPT_DIR}/scripts/initialize_calibration.py"
+  --config "${CONFIG_FILE}"
+)
 if [[ "${SENDER_ONLY}" != "1" ]]; then
   SENDER_CMD+=(--wait-for-start --start-signal-file "${START_SIGNAL_FILE}")
 fi
@@ -155,6 +160,9 @@ if [[ "${PRINT_ONLY}" == "1" ]]; then
     "${CONTROLLER_LAUNCHER_CMD[@]}"
   fi
   if [[ "${CONTROLLER_ONLY}" != "1" ]]; then
+    printf '[INFO] Calibration initializer command:'
+    printf ' %q' "${CALIBRATION_INITIALIZER_CMD[@]}"
+    printf '\n'
     printf '[INFO] Sender command:'
     printf ' %q' "${SENDER_CMD[@]}"
     printf '\n'
@@ -206,11 +214,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "[1/6] Config: ${CONFIG_FILE}"
-echo "[1/6] Start signal file: ${START_SIGNAL_FILE}"
+echo "[1/7] Config: ${CONFIG_FILE}"
+echo "[1/7] Start signal file: ${START_SIGNAL_FILE}"
 rm -f "${START_SIGNAL_FILE}"
 
-echo "[2/6] Starting Python inference sender..."
+echo "[2/7] Running guided calibration initialization..."
+"${CALIBRATION_INITIALIZER_CMD[@]}"
+
+echo "[3/7] Starting Python inference sender..."
 "${SENDER_CMD[@]}" &
 SENDER_PID="$!"
 
@@ -220,10 +231,10 @@ if ! kill -0 "${SENDER_PID}" 2>/dev/null; then
   wait "${SENDER_PID}" || true
   exit 1
 fi
-echo "[2/6] Python inference sender process started."
+echo "[3/7] Python inference sender process started."
 echo "      Watch for: Policy loaded, Ultrasound video stream ready, Waiting for start signal."
 
-echo "[3/6] Starting C++ controller..."
+echo "[4/7] Starting C++ controller..."
 if [[ "${DO_BUILD}" == "1" ]]; then
   "${SCRIPT_DIR}/cpp_controller/build.bash"
 fi
@@ -253,18 +264,20 @@ if ! kill -0 "${CONTROLLER_PID}" 2>/dev/null; then
   exit 1
 fi
 
-echo "[4/6] C++ controller process started. It should now connect to Franka and open the TCP server."
+echo "[5/7] C++ controller process started. It should now connect to Franka and open the TCP server."
 
-echo "[5/6] Waiting for readiness messages:"
+echo "[6/7] Waiting for initialization records:"
 echo "      - Python: Policy loaded and set to eval mode"
 echo "      - Python: Ultrasound video stream ready"
+echo "      - Python: Calibration force reference captured"
+echo "      - C++: Initial EE orientation captured"
 echo "      - C++: Waiting for Python policy stream"
 echo "      - Python: Connected to controller"
 echo "      - C++: Python policy client connected"
 echo
-read -r -p "Press Enter to start policy streaming and robot motion..."
+read -r -p "After the contact Fz and EE orientation messages appear, press Enter to start inference and robot motion..."
 mkdir -p "$(dirname "${START_SIGNAL_FILE}")"
 touch "${START_SIGNAL_FILE}"
-echo "[6/6] Start signal sent. Policy actions are now allowed to stream."
+echo "[7/7] Start signal sent. Policy actions are now allowed to stream."
 
 wait "${SENDER_PID}"

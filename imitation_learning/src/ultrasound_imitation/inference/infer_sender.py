@@ -185,7 +185,11 @@ def main() -> None:
     while True:
         loop_start = time.monotonic()
         image = pending_image
+        if seq == 0:
+            print("[INFO] Starting first policy inference.", flush=True)
         actions = policy.predict(image)
+        if seq == 0:
+            print(f"[INFO] First policy inference completed: actions={len(actions)}", flush=True)
         force_sample = force_monitor.read()
         force_ok = force_monitor.check(force_sample)
         calibration_force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_sample

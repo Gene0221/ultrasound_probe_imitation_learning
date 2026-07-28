@@ -156,9 +156,17 @@ def read_keyboard_char():
     return None
 
 
-def read_exact_frame(ser: serial.Serial, buffer: bytearray, debug=False):
+def read_exact_frame(
+    ser: serial.Serial,
+    buffer: bytearray,
+    debug=False,
+    timeout_s: float | None = None,
+):
+    deadline = None if timeout_s is None else time.monotonic() + timeout_s
     last_status_time = time.monotonic()
     while True:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError(f"Timed out after {timeout_s:.3f}s waiting for a valid KWR75B frame.")
         chunk = ser.read(ser.in_waiting or 1)
         if chunk:
             buffer.extend(chunk)
@@ -197,22 +205,46 @@ def read_exact_frame(ser: serial.Serial, buffer: bytearray, debug=False):
         return frame
 
 
-def read_one_sample(ser: serial.Serial, buffer: bytearray, command: bytes, request_mode: bool, debug=False):
+def read_one_sample(
+    ser: serial.Serial,
+    buffer: bytearray,
+    command: bytes,
+    request_mode: bool,
+    debug=False,
+    timeout_s: float | None = None,
+):
     if request_mode:
         ser.write(command)
         if debug:
             print("tx command")
         time.sleep(0.002)
-    frame = read_exact_frame(ser, buffer, debug=debug)
+    frame = read_exact_frame(ser, buffer, debug=debug, timeout_s=timeout_s)
     return parse_frame(frame)
 
 
-def tare_sensor(ser, buffer, command, request_mode, sample_count=100, debug=False):
+def tare_sensor(
+    ser,
+    buffer,
+    command,
+    request_mode,
+    sample_count=100,
+    debug=False,
+    sample_timeout_s: float | None = None,
+):
     samples = []
     print(f"tare start: collecting {sample_count} samples, keep sensor unloaded and still...")
     for _ in range(sample_count):
         try:
-            samples.append(read_one_sample(ser, buffer, command, request_mode, debug=debug))
+            samples.append(
+                read_one_sample(
+                    ser,
+                    buffer,
+                    command,
+                    request_mode,
+                    debug=debug,
+                    timeout_s=sample_timeout_s,
+                )
+            )
         except ValueError as exc:
             print(exc)
     if not samples:

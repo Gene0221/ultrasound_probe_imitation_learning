@@ -876,7 +876,8 @@ int main(int argc, char** argv) {
 
     const franka::RobotState initial_state = robot.readOnce();
     Pose commanded_pose = MatrixToPose(ArrayToMatrix(initial_state.O_T_EE_c));
-    const Quaternion initial_orientation = commanded_pose.q;
+    const Pose initial_measured_pose = MatrixToPose(ArrayToMatrix(initial_state.O_T_EE));
+    const Quaternion initial_orientation = initial_measured_pose.q;
     Vec3 commanded_velocity{0.0, 0.0, 0.0};
     Vec3 commanded_angular_velocity{0.0, 0.0, 0.0};
     std::vector<TrajectorySample> active_trajectory{TrajectorySample{0.0, commanded_pose}};
@@ -891,7 +892,9 @@ int main(int argc, char** argv) {
     double calibration_total_z = 0.0;
 
     if (opt.calibration_enabled) {
-      std::cout << "[INFO] Calibration enabled. Initial EE orientation captured.\n";
+      std::cout << "[INFO] Calibration enabled. Initial EE orientation captured: quaternion_xyzw=["
+                << initial_orientation.x << ", " << initial_orientation.y << ", "
+                << initial_orientation.z << ", " << initial_orientation.w << "]\n";
     } else {
       std::cout << "[INFO] Calibration disabled.\n";
     }
