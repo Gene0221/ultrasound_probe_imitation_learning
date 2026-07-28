@@ -106,7 +106,6 @@ struct Options {
   std::string host = "127.0.0.1";
   int port = 50555;
   int action_horizon = 20;
-  double receive_timeout_s = 0.15;
   double max_step_translation = 0.003;
   double max_step_rotation = 0.05;
   double max_translation_speed = 0.2;
@@ -769,7 +768,6 @@ void PrintUsage(const char* argv0) {
       << "Options:\n"
       << "  --host <ip>                         Default: 127.0.0.1\n"
       << "  --port <port>                       Default: 50555\n"
-      << "  --receive-timeout-ms <ms>           Default: 150\n"
       << "  --action-horizon <n>                Default: 20\n"
       << "  --max-step-translation <m>          Default: 0.003\n"
       << "  --max-step-rotation <rad>           Default: 0.05\n"
@@ -811,8 +809,6 @@ Options ParseArgs(int argc, char** argv) {
       opt.host = require_value(arg);
     } else if (arg == "--port") {
       opt.port = std::stoi(require_value(arg));
-    } else if (arg == "--receive-timeout-ms") {
-      opt.receive_timeout_s = std::stod(require_value(arg)) / 1000.0;
     } else if (arg == "--action-horizon") {
       opt.action_horizon = std::stoi(require_value(arg));
     } else if (arg == "--max-step-translation") {
@@ -872,9 +868,6 @@ Options ParseArgs(int argc, char** argv) {
   }
   if (opt.action_horizon <= 0) {
     throw std::runtime_error("--action-horizon must be positive.");
-  }
-  if (opt.receive_timeout_s <= 0.0) {
-    throw std::runtime_error("--receive-timeout-ms must be positive.");
   }
   if (opt.filter_cutoff_hz <= 0.0 || opt.orientation_filter_cutoff_hz <= 0.0) {
     throw std::runtime_error("Filter cutoff values must be positive.");

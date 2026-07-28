@@ -175,7 +175,7 @@ def main() -> None:
     client = JsonLineClient(
         str(runtime.get("host", "127.0.0.1")),
         int(runtime.get("port", 50555)),
-        float(runtime.get("send_timeout_s", 0.2)),
+        float(runtime.get("connect_timeout_s", 0.2)),
         float(runtime.get("reconnect_delay_s", 1.0)),
     )
     client.connect()

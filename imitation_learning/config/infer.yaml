@@ -37,14 +37,10 @@ policy:
       beta_end: 0.02
 
 runtime:
-  camera_hz: 30.0
-  control_hz: 1000.0
-  transport: tcp
   host: 127.0.0.1
   port: 50555
   reconnect_delay_s: 1.0
-  send_timeout_s: 0.2
-  receive_timeout_ms: 3000
+  connect_timeout_s: 0.2
   start_signal_file: runtime/start_policy_stream.flag
 
 franka:
@@ -69,11 +65,7 @@ motion:
     action_dt_s: 0.03
     speed_scale: 0.4
     execute_steps_per_inference: 20
-    mode: relative
-    interpolator: quintic
-    bspline_smoothing_factor: 0.0016
     ramp_time_s: 3.0
-    hold_on_no_prediction: true
 
     online_filter:
       enabled: true
@@ -93,11 +85,7 @@ motion:
     action_dt_s: 0.5
     speed_scale: 0.25
     execute_steps_per_inference: 5
-    mode: relative
-    interpolator: quintic #quintic or bspline
-    bspline_smoothing_factor: 0.002
     ramp_time_s: 3.0
-    hold_on_no_prediction: true
 
     online_filter:
       enabled: true
@@ -115,11 +103,8 @@ motion:
 
 force_safety:
   enabled: false
-  source: external_6d
   reader: placeholder # placeholder or kwr75b_serial
-  sampling_hz: 30.0
   consecutive_violation_limit: 3
-  violation_action: hold_position
   serial:
     port: AUTO
     serial_number: AB0KU8NU
@@ -142,7 +127,7 @@ calibration:
     tare_samples: 100
     tare_settle_s: 1.0
     prompt_for_contact: true
-  interval_inferences: 3
+  inferences_per_cycle: 3
   force_axis: Fz_N
   force_tolerance_N: 0.5
   initial_force_samples: 5
@@ -153,14 +138,10 @@ calibration:
   max_total_z_correction_m: 0.01
   orientation_tolerance_rad: 0.01
   force_settle_cycles: 3
-  telemetry_hz: 30.0
-  min_telemetry_s: 1.0
-  telemetry_timeout_s: 5.0
+  force_sample_hz: 30.0
   force_reader:
     enabled: true
-    source: external_6d
     reader: kwr75b_serial # placeholder or kwr75b_serial
-    sampling_hz: 30.0
     serial:
       port: AUTO
       serial_number: AB0KU8NU

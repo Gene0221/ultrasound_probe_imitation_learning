@@ -84,7 +84,6 @@ def main() -> None:
     command = [str(Path(args.binary).resolve()), "--robot-ip", robot_ip]
     add_flag(command, "--host", runtime.get("host", "127.0.0.1"))
     add_flag(command, "--port", int(runtime.get("port", 50555)))
-    add_flag(command, "--receive-timeout-ms", int(runtime.get("receive_timeout_ms", 150)))
     add_flag(command, "--action-horizon", int(motion.get("action_horizon", policy_cfg.get("action_horizon", 20))))
     add_flag(command, "--max-step-translation", limits.get("max_step_translation_m", 0.003))
     add_flag(command, "--max-step-rotation", limits.get("max_step_rotation_rad", 0.05))
@@ -105,7 +104,7 @@ def main() -> None:
 
     if bool(calibration.get("enabled", False)):
         command.append("--enable-calibration")
-    add_flag(command, "--calibration-interval-inferences", calibration.get("interval_inferences", 3))
+    add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))
     add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
     add_flag(command, "--calibration-z-gain", calibration.get("z_correction_gain_m_per_N", 0.0002))
     add_flag(command, "--calibration-z-sign", calibration.get("z_correction_sign", 1.0))
@@ -113,7 +112,7 @@ def main() -> None:
     add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
     add_flag(command, "--calibration-orientation-tolerance", calibration.get("orientation_tolerance_rad", 0.01))
     add_flag(command, "--calibration-force-settle-cycles", calibration.get("force_settle_cycles", 3))
-    add_flag(command, "--calibration-force-sample-hz", calibration.get("telemetry_hz", 30.0))
+    add_flag(command, "--calibration-force-sample-hz", calibration.get("force_sample_hz", 30.0))
 
     print(" ".join(shlex.quote(item) for item in command))
     if not args.print_only:
