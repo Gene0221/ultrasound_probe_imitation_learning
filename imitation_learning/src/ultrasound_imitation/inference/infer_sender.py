@@ -29,12 +29,13 @@ class JsonLineClient:
         self.timeout_s = timeout_s
         self.reconnect_delay_s = reconnect_delay_s
         self.sock: socket.socket | None = None
+        self._receive_buffer = b""
 
     def connect(self) -> None:
         while self.sock is None:
             try:
                 sock = socket.create_connection((self.host, self.port), timeout=self.timeout_s)
-                sock.settimeout(self.timeout_s)
+                sock.settimeout(None)
                 self.sock = sock
                 print(f"[INFO] Connected to controller at {self.host}:{self.port}")
             except OSError as exc:
@@ -54,6 +55,21 @@ class JsonLineClient:
             self.connect()
             assert self.sock is not None
             self.sock.sendall(data)
+
+    def receive(self) -> dict[str, Any]:
+        if self.sock is None:
+            self.connect()
+        assert self.sock is not None
+        while b"\n" not in self._receive_buffer:
+            received = self.sock.recv(4096)
+            if not received:
+                raise ConnectionError("Controller closed the command connection.")
+            self._receive_buffer += received
+        line, self._receive_buffer = self._receive_buffer.split(b"\n", 1)
+        payload = json.loads(line.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("Controller command must be a JSON object.")
+        return payload
 
 
 def build_source(args: argparse.Namespace, config: dict[str, Any]):
@@ -172,84 +188,53 @@ def main() -> None:
     if wait_enabled:
         wait_for_start_signal(start_signal_file)
 
-    period_s = 1.0 / max(float(runtime.get("camera_hz", 30.0)), 1e-6)
-    calibration_interval = max(1, int(calibration_cfg.get("interval_inferences", 3)))
     calibration_axis = str(calibration_cfg.get("force_axis", "Fz_N"))
-    calibration_tolerance = float(calibration_cfg.get("force_tolerance_N", 0.5))
-    calibration_settle_cycles = max(1, int(calibration_cfg.get("force_settle_cycles", 3)))
-    calibration_telemetry_period_s = 1.0 / max(float(calibration_cfg.get("telemetry_hz", runtime.get("camera_hz", 30.0))), 1e-6)
-    calibration_min_telemetry_s = float(calibration_cfg.get("min_telemetry_s", 1.0))
-    calibration_timeout_s = float(calibration_cfg.get("telemetry_timeout_s", 5.0))
     seq = 0
     pending_image = first_image
+    client.send({"mode": "ready", "timestamp_s": time.time()})
+    print("[INFO] Python inference service ready. Waiting for C++ requests.", flush=True)
     while True:
-        loop_start = time.monotonic()
-        image = pending_image
-        if seq == 0:
-            print("[INFO] Starting first policy inference.", flush=True)
-        actions = policy.predict(image)
-        if seq == 0:
-            print(f"[INFO] First policy inference completed: actions={len(actions)}", flush=True)
-        force_sample = force_monitor.read()
-        force_ok = force_monitor.check(force_sample)
-        calibration_force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_sample
-        payload = {
-            "seq": seq,
-            "timestamp_s": time.time(),
-            "mode": "relative_delta_chunk",
-            "action_dt_s": float(motion.get("action_dt_s", 0.03)),
-            "speed_scale": float(motion.get("speed_scale", 0.4)),
-            "execute_steps": int(motion.get("execute_steps_per_inference", 1)),
-            "actions": actions,
-            "force_safety_ok": force_ok,
-            "force": force_sample.as_dict(),
-            "calibration_force": calibration_force_sample.as_dict(),
-            "calibration_Fz_N": read_force_axis(calibration_force_sample, calibration_axis),
-        }
-        if initial_calibration_force is not None:
-            payload["calibration_initial_force_N"] = initial_calibration_force
-        client.send(payload)
-        if seq == 0:
-            print(f"[INFO] First policy chunk sent: actions={len(actions)}", flush=True)
-        seq += 1
-        if calibration_enabled and seq % calibration_interval == 0:
-            assert initial_calibration_force is not None
-            print(f"[INFO] Calibration telemetry started after {seq} policy inferences.", flush=True)
-            settled = 0
-            calibration_start = time.monotonic()
-            while time.monotonic() - calibration_start < calibration_timeout_s:
-                force_sample = force_monitor.read()
-                calibration_force_sample = calibration_force_monitor.read()
-                force_value = read_force_axis(calibration_force_sample, calibration_axis)
-                force_error = force_value - initial_calibration_force
-                payload = {
-                    "seq": seq,
-                    "timestamp_s": time.time(),
-                    "mode": "calibration",
-                    "force": force_sample.as_dict(),
-                    "calibration_force": calibration_force_sample.as_dict(),
-                    "calibration_Fz_N": force_value,
-                    "calibration_initial_force_N": initial_calibration_force,
-                    "calibration_force_error_N": force_error,
-                }
-                client.send(payload)
-                if abs(force_error) <= calibration_tolerance:
-                    settled += 1
-                    if settled >= calibration_settle_cycles and time.monotonic() - calibration_start >= calibration_min_telemetry_s:
-                        break
-                else:
-                    settled = 0
-                time.sleep(calibration_telemetry_period_s)
-            print(
-                f"[INFO] Calibration force telemetry finished: settled_cycles={settled}. "
-                "Resuming inference; wait for the C++ controller's 'Calibration complete' message "
-                "before treating physical calibration as complete.",
-                flush=True,
-            )
-        pending_image = next(frame_iter)
-        sleep_s = period_s - (time.monotonic() - loop_start)
-        if sleep_s > 0.0:
-            time.sleep(sleep_s)
+        command = client.receive()
+        command_type = str(command.get("command", "")).lower()
+        request_id = int(command.get("request_id", -1))
+        if command_type == "infer":
+            image = pending_image
+            actions = policy.predict(image)
+            force_sample = force_monitor.read()
+            force_ok = force_monitor.check(force_sample)
+            calibration_force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_sample
+            payload = {
+                "seq": request_id if request_id >= 0 else seq,
+                "request_id": request_id,
+                "timestamp_s": time.time(),
+                "mode": "relative_delta_chunk",
+                "action_dt_s": float(motion.get("action_dt_s", 0.03)),
+                "speed_scale": float(motion.get("speed_scale", 0.4)),
+                "execute_steps": int(motion.get("execute_steps_per_inference", 1)),
+                "actions": actions,
+                "force_safety_ok": force_ok,
+                "force": force_sample.as_dict(),
+                "calibration_Fz_N": read_force_axis(calibration_force_sample, calibration_axis),
+            }
+            if initial_calibration_force is not None:
+                payload["calibration_initial_force_N"] = initial_calibration_force
+            client.send(payload)
+            print(f"[INFO] Responded to infer request {request_id}: actions={len(actions)}", flush=True)
+            seq += 1
+            pending_image = next(frame_iter)
+        elif command_type == "force_sample":
+            force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_monitor.read()
+            payload = {
+                "mode": "force_sample",
+                "request_id": request_id,
+                "timestamp_s": time.time(),
+                "calibration_Fz_N": read_force_axis(force_sample, calibration_axis),
+            }
+            if initial_calibration_force is not None:
+                payload["calibration_initial_force_N"] = initial_calibration_force
+            client.send(payload)
+        else:
+            raise ValueError(f"Unsupported controller command: {command_type!r}")
 
 
 if __name__ == "__main__":

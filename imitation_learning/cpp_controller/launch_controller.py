@@ -113,6 +113,7 @@ def main() -> None:
     add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
     add_flag(command, "--calibration-orientation-tolerance", calibration.get("orientation_tolerance_rad", 0.01))
     add_flag(command, "--calibration-force-settle-cycles", calibration.get("force_settle_cycles", 3))
+    add_flag(command, "--calibration-force-sample-hz", calibration.get("telemetry_hz", 30.0))
 
     print(" ".join(shlex.quote(item) for item in command))
     if not args.print_only:
