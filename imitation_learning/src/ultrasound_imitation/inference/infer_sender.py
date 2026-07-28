@@ -185,7 +185,6 @@ def main() -> None:
     while True:
         loop_start = time.monotonic()
         image = pending_image
-        pending_image = next(frame_iter)
         actions = policy.predict(image)
         force_sample = force_monitor.read()
         force_ok = force_monitor.check(force_sample)
@@ -206,6 +205,8 @@ def main() -> None:
         if initial_calibration_force is not None:
             payload["calibration_initial_force_N"] = initial_calibration_force
         client.send(payload)
+        if seq == 0:
+            print(f"[INFO] First policy chunk sent: actions={len(actions)}", flush=True)
         seq += 1
         if calibration_enabled and seq % calibration_interval == 0:
             assert initial_calibration_force is not None
@@ -236,6 +237,7 @@ def main() -> None:
                     settled = 0
                 time.sleep(calibration_telemetry_period_s)
             print(f"[INFO] Calibration telemetry finished: settled_cycles={settled}. Resuming inference.", flush=True)
+        pending_image = next(frame_iter)
         sleep_s = period_s - (time.monotonic() - loop_start)
         if sleep_s > 0.0:
             time.sleep(sleep_s)

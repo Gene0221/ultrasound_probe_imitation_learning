@@ -114,7 +114,7 @@ motion:
       max_rotation_acceleration_radps2: 0.5
 
 force_safety:
-  enabled: true
+  enabled: false
   source: external_6d
   reader: placeholder # placeholder or kwr75b_serial
   sampling_hz: 30.0
@@ -136,7 +136,7 @@ force_safety:
     Mz_Nm: 0.8
 
 calibration:
-  enabled: false
+  enabled: true
   interval_inferences: 3
   force_axis: Fz_N
   force_tolerance_N: 0.5
