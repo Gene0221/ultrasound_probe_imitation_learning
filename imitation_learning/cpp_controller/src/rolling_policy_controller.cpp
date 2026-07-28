@@ -888,6 +888,7 @@ int main(int argc, char** argv) {
     double waiting_for_next_chunk_s = 0.0;
     std::optional<double> initial_fz_N;
     bool calibration_in_progress = false;
+    long long last_handled_calibration_seq = -1;
     int calibration_settled_cycles = 0;
     double calibration_total_z = 0.0;
 
@@ -926,12 +927,20 @@ int main(int argc, char** argv) {
                   << *initial_fz_N << " N\n";
       }
 
-      if (opt.calibration_enabled && calibration_requested && initial_fz_N.has_value() && !calibration_in_progress) {
+      if (opt.calibration_enabled && calibration_requested && initial_fz_N.has_value() &&
+          !calibration_in_progress && calibration_seq >= 0 &&
+          calibration_seq != last_handled_calibration_seq) {
         calibration_in_progress = true;
+        last_handled_calibration_seq = calibration_seq;
         calibration_settled_cycles = 0;
+        calibration_total_z = 0.0;
+        // Calibration packets use the next policy sequence number. Mark all earlier
+        // chunks as cancelled so a completed calibration never replays stale motion.
+        active_seq = std::max(active_seq, calibration_seq - 1);
         active_trajectory = std::vector<TrajectorySample>{TrajectorySample{0.0, commanded_pose}};
         trajectory_elapsed_s = 0.0;
-        std::cout << "[INFO] Calibration requested after policy seq=" << calibration_seq << "\n";
+        std::cout << "[INFO] Calibration requested before policy seq=" << calibration_seq
+                  << "; cancelled policy chunks through seq=" << active_seq << "\n";
       }
 
       ControllerMode next_mode = ControllerMode::kWaitingForPolicy;
@@ -1020,7 +1029,8 @@ int main(int argc, char** argv) {
           active_trajectory = std::vector<TrajectorySample>{TrajectorySample{0.0, commanded_pose}};
           trajectory_elapsed_s = 0.0;
           std::cout << "[INFO] Calibration complete: Fz_error=" << force_error
-                    << " N total_z_correction=" << calibration_total_z << " m\n";
+                    << " N total_z_correction=" << calibration_total_z
+                    << " m. Waiting for policy seq greater than " << active_seq << ".\n";
         }
       } else if (!hold_position && !active_trajectory.empty()) {
         target_pose = Interpolate(active_trajectory, trajectory_elapsed_s).pose;

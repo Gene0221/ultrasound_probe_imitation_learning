@@ -1,5 +1,5 @@
 policy:
-  type: act
+  type: diffusion
   act:
     model_dir: runs/without_force/act_pose_h20
     checkpoint_name: best.pt

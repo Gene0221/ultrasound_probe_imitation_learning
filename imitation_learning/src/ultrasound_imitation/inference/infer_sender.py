@@ -240,7 +240,12 @@ def main() -> None:
                 else:
                     settled = 0
                 time.sleep(calibration_telemetry_period_s)
-            print(f"[INFO] Calibration telemetry finished: settled_cycles={settled}. Resuming inference.", flush=True)
+            print(
+                f"[INFO] Calibration force telemetry finished: settled_cycles={settled}. "
+                "Resuming inference; wait for the C++ controller's 'Calibration complete' message "
+                "before treating physical calibration as complete.",
+                flush=True,
+            )
         pending_image = next(frame_iter)
         sleep_s = period_s - (time.monotonic() - loop_start)
         if sleep_s > 0.0:
