@@ -154,6 +154,8 @@ def main() -> None:
     add_flag(command, "--calibration-z-sign", calibration.get("z_correction_sign", 1.0))
     add_flag(command, "--calibration-max-z-step", calibration.get("max_z_step_m", 0.0005))
     add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
+    add_flag(command, "--calibration-z-settle-tolerance", calibration.get("z_position_settle_tolerance_m", 0.0001))
+    add_flag(command, "--calibration-z-settle-velocity", calibration.get("z_position_settle_velocity_mps", 0.001))
     add_flag(command, "--calibration-orientation-tolerance", calibration.get("orientation_tolerance_rad", 0.01))
     add_flag(command, "--calibration-force-settle-cycles", calibration.get("force_settle_cycles", 3))
     add_flag(command, "--calibration-force-sample-hz", calibration.get("force_sample_hz", 30.0))
