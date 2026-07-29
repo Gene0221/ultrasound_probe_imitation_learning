@@ -34,6 +34,31 @@ def add_flag(command: list[str], name: str, value: Any) -> None:
     command.extend([name, str(value)])
 
 
+def read_nested_mapping_value(payload: dict[str, Any], dotted_key: str) -> Any:
+    value: Any = payload
+    for key in dotted_key.split("."):
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"Missing transform key '{dotted_key}' in calibration report.")
+        value = value[key]
+    return value
+
+
+def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> str:
+    file_value = contact_frame.get("transform_file")
+    if not file_value:
+        raise ValueError("calibration.contact_frame.transform_file is required when contact_frame.enabled=true.")
+    report_path = Path(str(file_value))
+    if not report_path.is_absolute():
+        report_path = (PROJECT_ROOT / report_path).resolve()
+    report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict):
+        raise ValueError(f"Expected a mapping in calibration report: {report_path}")
+    matrix = read_nested_mapping_value(report, str(contact_frame.get("transform_key", "estimated_transforms.T_tag_to_flange")))
+    if not isinstance(matrix, list) or len(matrix) != 4 or any(not isinstance(row, list) or len(row) != 4 for row in matrix):
+        raise ValueError("Probe-to-EE transform must be a 4x4 matrix.")
+    return ",".join(str(float(value)) for row in matrix for value in row)
+
+
 def active_policy_config(config: dict[str, Any]) -> dict[str, Any]:
     policy = config.get("policy", {})
     if not isinstance(policy, dict):
@@ -104,6 +129,10 @@ def main() -> None:
 
     if bool(calibration.get("enabled", False)):
         command.append("--enable-calibration")
+    contact_frame = calibration.get("contact_frame", {})
+    if bool(contact_frame.get("enabled", False)):
+        command.append("--use-probe-reference")
+        add_flag(command, "--probe-to-ee-transform", load_probe_to_ee_transform(contact_frame))
     add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))
     add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
     add_flag(command, "--calibration-z-gain", calibration.get("z_correction_gain_m_per_N", 0.0002))

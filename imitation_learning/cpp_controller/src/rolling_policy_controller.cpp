@@ -127,6 +127,8 @@ struct Options {
   double calibration_orientation_tolerance = 0.01;
   int calibration_force_settle_cycles = 3;
   double calibration_force_sample_hz = 30.0;
+  bool use_probe_reference = false;
+  std::array<double, 16> probe_to_ee{};
 };
 
 enum class ControllerMode {
@@ -357,6 +359,20 @@ Matrix4 Multiply(const Matrix4& a, const Matrix4& b) {
   return out;
 }
 
+Matrix4 InvertRigidTransform(const Matrix4& transform) {
+  Matrix4 inverse = Identity();
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      inverse(row, col) = transform(col, row);
+    }
+  }
+  const Vec3 translation{transform(0, 3), transform(1, 3), transform(2, 3)};
+  inverse(0, 3) = -(inverse(0, 0) * translation.x + inverse(0, 1) * translation.y + inverse(0, 2) * translation.z);
+  inverse(1, 3) = -(inverse(1, 0) * translation.x + inverse(1, 1) * translation.y + inverse(1, 2) * translation.z);
+  inverse(2, 3) = -(inverse(2, 0) * translation.x + inverse(2, 1) * translation.y + inverse(2, 2) * translation.z);
+  return inverse;
+}
+
 Quaternion MatrixToQuaternion(const Matrix4& m) {
   const double trace = m(0, 0) + m(1, 1) + m(2, 2);
   Quaternion q;
@@ -400,6 +416,16 @@ Matrix4 ArrayToMatrix(const std::array<double, 16>& values) {
   Matrix4 m;
   m.data = values;
   return m;
+}
+
+Matrix4 RowMajorArrayToMatrix(const std::array<double, 16>& values) {
+  Matrix4 matrix;
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      matrix(row, col) = values[static_cast<std::size_t>(row * 4 + col)];
+    }
+  }
+  return matrix;
 }
 
 Matrix4 ActionToMatrix(const Action& action) {
@@ -536,6 +562,23 @@ double ParseNumberField(const std::string& line, const std::string& key, double 
   char* parsed_end = nullptr;
   const double value = std::strtod(ptr, &parsed_end);
   return parsed_end == ptr ? default_value : value;
+}
+
+std::array<double, 16> ParseMatrix4Csv(const std::string& text) {
+  std::array<double, 16> values{};
+  std::stringstream stream(text);
+  std::string token;
+  std::size_t index = 0;
+  while (std::getline(stream, token, ',')) {
+    if (index >= values.size()) {
+      throw std::runtime_error("--probe-to-ee-transform must contain exactly 16 values.");
+    }
+    values[index++] = std::stod(token);
+  }
+  if (index != values.size()) {
+    throw std::runtime_error("--probe-to-ee-transform must contain exactly 16 values.");
+  }
+  return values;
 }
 
 bool ParseBoolField(const std::string& line, const std::string& key, bool default_value) {
@@ -789,7 +832,9 @@ void PrintUsage(const char* argv0) {
       << "  --calibration-max-total-z <m>       Default: 0.01\n"
       << "  --calibration-orientation-tolerance <rad> Default: 0.01\n"
       << "  --calibration-force-settle-cycles <n> Default: 3\n"
-      << "  --calibration-force-sample-hz <hz>   Default: 30\n";
+      << "  --calibration-force-sample-hz <hz>   Default: 30\n"
+      << "  --use-probe-reference\n"
+      << "  --probe-to-ee-transform <16 comma-separated values>\n";
 }
 
 Options ParseArgs(int argc, char** argv) {
@@ -853,6 +898,10 @@ Options ParseArgs(int argc, char** argv) {
       opt.calibration_force_settle_cycles = std::stoi(require_value(arg));
     } else if (arg == "--calibration-force-sample-hz") {
       opt.calibration_force_sample_hz = std::stod(require_value(arg));
+    } else if (arg == "--use-probe-reference") {
+      opt.use_probe_reference = true;
+    } else if (arg == "--probe-to-ee-transform") {
+      opt.probe_to_ee = ParseMatrix4Csv(require_value(arg));
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -913,8 +962,17 @@ int main(int argc, char** argv) {
 
     const franka::RobotState initial_state = robot.readOnce();
     Pose commanded_pose = MatrixToPose(ArrayToMatrix(initial_state.O_T_EE_c));
-    const Pose initial_measured_pose = MatrixToPose(ArrayToMatrix(initial_state.O_T_EE));
+    const Matrix4 initial_ee_matrix = ArrayToMatrix(initial_state.O_T_EE);
+    const Pose initial_measured_pose = MatrixToPose(initial_ee_matrix);
     const Quaternion initial_orientation = initial_measured_pose.q;
+    Matrix4 probe_to_ee = Identity();
+    Matrix4 ee_to_probe = Identity();
+    Pose initial_probe_pose = initial_measured_pose;
+    if (opt.use_probe_reference) {
+      probe_to_ee = RowMajorArrayToMatrix(opt.probe_to_ee);
+      ee_to_probe = InvertRigidTransform(probe_to_ee);
+      initial_probe_pose = MatrixToPose(Multiply(initial_ee_matrix, probe_to_ee));
+    }
     Vec3 commanded_velocity{0.0, 0.0, 0.0};
     Vec3 commanded_angular_velocity{0.0, 0.0, 0.0};
     std::vector<TrajectorySample> active_trajectory{TrajectorySample{0.0, commanded_pose}};
@@ -938,6 +996,11 @@ int main(int argc, char** argv) {
       std::cout << "[INFO] Calibration enabled. Initial EE orientation captured: quaternion_xyzw=["
                 << initial_orientation.x << ", " << initial_orientation.y << ", "
                 << initial_orientation.z << ", " << initial_orientation.w << "]\n";
+      if (opt.use_probe_reference) {
+        std::cout << "[INFO] Probe-reference calibration enabled. Initial probe orientation captured: quaternion_xyzw=["
+                  << initial_probe_pose.q.x << ", " << initial_probe_pose.q.y << ", "
+                  << initial_probe_pose.q.z << ", " << initial_probe_pose.q.w << "]\n";
+      }
     } else {
       std::cout << "[INFO] Calibration disabled.\n";
     }
@@ -988,8 +1051,14 @@ int main(int argc, char** argv) {
         trajectory_elapsed_s = 0.0;
         if (opt.calibration_enabled && completed_inferences >= opt.calibration_interval_inferences) {
           calibration_phase = CalibrationPhase::kOrientation;
-          calibration_target = commanded_pose;
-          calibration_target.q = initial_orientation;
+          if (opt.use_probe_reference) {
+            const Pose current_probe_pose = MatrixToPose(Multiply(PoseToMatrix(commanded_pose), probe_to_ee));
+            calibration_target = MatrixToPose(Multiply(
+                PoseToMatrix(Pose{current_probe_pose.p, initial_probe_pose.q}), ee_to_probe));
+          } else {
+            calibration_target = commanded_pose;
+            calibration_target.q = initial_orientation;
+          }
           calibration_settled_cycles = 0;
           calibration_total_z = 0.0;
           std::cout << "[INFO] Starting calibration: orientation phase at fixed position.\n";
@@ -1027,7 +1096,11 @@ int main(int argc, char** argv) {
       Pose target_pose = commanded_pose;
       if (calibration_phase == CalibrationPhase::kOrientation) {
         target_pose = calibration_target;
-        const Quaternion orientation_error_q = Multiply(initial_orientation, Conjugate(commanded_pose.q));
+        const Quaternion current_orientation = opt.use_probe_reference
+            ? MatrixToPose(Multiply(PoseToMatrix(commanded_pose), probe_to_ee)).q
+            : commanded_pose.q;
+        const Quaternion reference_orientation = opt.use_probe_reference ? initial_probe_pose.q : initial_orientation;
+        const Quaternion orientation_error_q = Multiply(reference_orientation, Conjugate(current_orientation));
         const bool orientation_in_range =
             QuaternionAngle(orientation_error_q) <= opt.calibration_orientation_tolerance;
         if (orientation_in_range) {
@@ -1038,8 +1111,15 @@ int main(int argc, char** argv) {
         if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {
           calibration_phase = CalibrationPhase::kForce;
           calibration_settled_cycles = 0;
-          calibration_target.p = commanded_pose.p;
-          std::cout << "[INFO] Calibration orientation complete. Starting EE-z force phase.\n";
+          if (opt.use_probe_reference) {
+            const Pose current_probe_pose = MatrixToPose(Multiply(PoseToMatrix(commanded_pose), probe_to_ee));
+            calibration_target = MatrixToPose(Multiply(
+                PoseToMatrix(Pose{current_probe_pose.p, initial_probe_pose.q}), ee_to_probe));
+          } else {
+            calibration_target.p = commanded_pose.p;
+          }
+          std::cout << "[INFO] Calibration orientation complete. Starting "
+                    << (opt.use_probe_reference ? "probe-z" : "EE-z") << " force phase.\n";
         }
       } else if (calibration_phase == CalibrationPhase::kForce) {
         target_pose = calibration_target;
@@ -1070,7 +1150,14 @@ int main(int argc, char** argv) {
                                                opt.calibration_max_total_z);
             z_step = clamped_total - calibration_total_z;
             calibration_total_z = clamped_total;
-            calibration_target.p = calibration_target.p + RotateVector(initial_orientation, Vec3{0.0, 0.0, 1.0}) * z_step;
+            if (opt.use_probe_reference) {
+              Pose target_probe_pose = MatrixToPose(Multiply(PoseToMatrix(calibration_target), probe_to_ee));
+              target_probe_pose.p = target_probe_pose.p + RotateVector(initial_probe_pose.q, Vec3{0.0, 0.0, 1.0}) * z_step;
+              target_probe_pose.q = initial_probe_pose.q;
+              calibration_target = MatrixToPose(Multiply(PoseToMatrix(target_probe_pose), ee_to_probe));
+            } else {
+              calibration_target.p = calibration_target.p + RotateVector(initial_orientation, Vec3{0.0, 0.0, 1.0}) * z_step;
+            }
           }
           if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {
             calibration_phase = CalibrationPhase::kNone;

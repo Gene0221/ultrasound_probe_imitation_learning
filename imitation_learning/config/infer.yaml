@@ -122,6 +122,10 @@ force_safety:
 
 calibration:
   enabled: true
+  contact_frame:
+    enabled: false
+    transform_file: # tag2flange_calibration_report.json path
+    transform_key: estimated_transforms.T_tag_to_flange
   initialization:
     tare_enabled: true
     tare_samples: 100
