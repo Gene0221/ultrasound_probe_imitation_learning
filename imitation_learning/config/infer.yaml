@@ -142,6 +142,7 @@ calibration:
       max_total_correction_m: 0.01
       position_settle_tolerance_m: 0.0001
       position_settle_velocity_mps: 0.001
+      position_settle_timeout_s: 1.0
     initialization:
       tare_enabled: true
       tare_samples: 100

@@ -128,6 +128,7 @@ struct Options {
   double calibration_max_total_z = 0.01;
   double calibration_z_settle_tolerance = 0.0001;
   double calibration_z_settle_velocity = 0.001;
+  double calibration_z_settle_timeout = 1.0;
   double calibration_orientation_tolerance = 0.01;
   int calibration_force_settle_cycles = 3;
   double calibration_force_sample_hz = 30.0;
@@ -814,6 +815,7 @@ void PrintUsage(const char* argv0) {
       << "  --calibration-max-total-z <m>       Default: 0.01\n"
       << "  --calibration-z-settle-tolerance <m> Default: 0.0001\n"
       << "  --calibration-z-settle-velocity <m/s> Default: 0.001\n"
+      << "  --calibration-z-settle-timeout <s>   Default: 1.0\n"
       << "  --calibration-orientation-tolerance <rad> Default: 0.01\n"
       << "  --calibration-force-settle-cycles <n> Default: 3\n"
       << "  --calibration-force-sample-hz <hz>   Default: 30\n";
@@ -884,6 +886,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.calibration_z_settle_tolerance = std::stod(require_value(arg));
     } else if (arg == "--calibration-z-settle-velocity") {
       opt.calibration_z_settle_velocity = std::stod(require_value(arg));
+    } else if (arg == "--calibration-z-settle-timeout") {
+      opt.calibration_z_settle_timeout = std::stod(require_value(arg));
     } else if (arg == "--calibration-orientation-tolerance") {
       opt.calibration_orientation_tolerance = std::stod(require_value(arg));
     } else if (arg == "--calibration-force-settle-cycles") {
@@ -916,7 +920,8 @@ Options ParseArgs(int argc, char** argv) {
   if (opt.calibration_force_tolerance <= 0.0 || opt.calibration_z_gain < 0.0 ||
       opt.calibration_max_z_step < 0.0 || opt.calibration_max_total_z < 0.0 ||
       opt.calibration_z_settle_tolerance < 0.0 || opt.calibration_z_settle_velocity < 0.0 ||
-      opt.calibration_orientation_tolerance < 0.0 || !std::isfinite(opt.calibration_probe_z_offset)) {
+      opt.calibration_orientation_tolerance < 0.0 || opt.calibration_z_settle_timeout <= 0.0 ||
+      !std::isfinite(opt.calibration_probe_z_offset)) {
     throw std::runtime_error("Calibration numeric limits must be non-negative, and force tolerance must be positive.");
   }
   return opt;
@@ -975,6 +980,7 @@ int main(int argc, char** argv) {
     bool calibration_z_limit_logged = false;
     Pose calibration_target = commanded_pose;
     auto last_force_request_time = std::chrono::steady_clock::now();
+    auto calibration_z_target_issued_time = last_force_request_time;
 
     if (opt.calibration_enabled) {
       std::cout << "[INFO] Calibration enabled: orientation=" << opt.calibration_orientation_enabled
@@ -1124,9 +1130,16 @@ int main(int argc, char** argv) {
         const bool z_target_settled =
             Norm(calibration_target.p - measured_pose.p) <= opt.calibration_z_settle_tolerance &&
             Norm(commanded_velocity) <= opt.calibration_z_settle_velocity;
-        if (calibration_z_target_pending && z_target_settled) {
-          calibration_z_target_pending = false;
-          std::cout << "[INFO] Calibration z target settled. Requesting next force sample.\n";
+        if (calibration_z_target_pending) {
+          const double settle_wait_s = std::chrono::duration<double>(now - calibration_z_target_issued_time).count();
+          if (z_target_settled) {
+            calibration_z_target_pending = false;
+            std::cout << "[INFO] Calibration z target settled. Requesting next force sample.\n";
+          } else if (settle_wait_s >= opt.calibration_z_settle_timeout) {
+            calibration_z_target_pending = false;
+            std::cerr << "[WARN] Calibration z target did not settle within "
+                      << opt.calibration_z_settle_timeout << " s; requesting the next force sample.\n";
+          }
         }
         if (!calibration_z_target_pending && pending_force_request_id < 0 &&
             std::chrono::duration<double>(now - last_force_request_time).count() >= sample_period_s && python_ready) {
@@ -1163,6 +1176,7 @@ int main(int argc, char** argv) {
             calibration_target.p = calibration_target.p +
                 RotateVector(calibration_target.q, Vec3{0.0, 0.0, 1.0}) * z_step;
             calibration_z_target_pending = std::fabs(z_step) >= 1e-9;
+            calibration_z_target_issued_time = now;
           }
           if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {
             calibration_phase = CalibrationPhase::kNone;

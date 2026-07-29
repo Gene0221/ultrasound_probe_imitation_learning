@@ -122,6 +122,7 @@ def main() -> None:
     add_flag(command, "--calibration-max-total-z", ee_z.get("max_total_correction_m", 0.01))
     add_flag(command, "--calibration-z-settle-tolerance", ee_z.get("position_settle_tolerance_m", 0.0001))
     add_flag(command, "--calibration-z-settle-velocity", ee_z.get("position_settle_velocity_mps", 0.001))
+    add_flag(command, "--calibration-z-settle-timeout", ee_z.get("position_settle_timeout_s", 1.0))
     add_flag(command, "--calibration-orientation-tolerance", orientation_calibration.get("tolerance_rad", 0.01))
     add_flag(command, "--calibration-force-settle-cycles", calibration.get("settle_cycles", 3))
     add_flag(command, "--calibration-force-sample-hz", force_calibration.get("sample_hz", 30.0))
