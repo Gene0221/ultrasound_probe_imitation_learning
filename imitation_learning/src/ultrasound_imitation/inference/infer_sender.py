@@ -134,6 +134,7 @@ def main() -> None:
     force_cfg = config.get("force_safety", {})
     calibration_cfg = config.get("calibration", {})
     calibration_enabled = bool(calibration_cfg.get("enabled", False))
+    calibration_force_enabled = calibration_enabled and bool(calibration_cfg.get("force_enabled", True))
 
     print(f"[INFO] Config: {Path(args.config).resolve()}", flush=True)
     print(
@@ -156,7 +157,7 @@ def main() -> None:
     )
     calibration_force_monitor: ForceSafetyMonitor | None = None
     initial_calibration_force: float | None = None
-    if calibration_enabled:
+    if calibration_force_enabled:
         calibration_force_cfg = dict(calibration_cfg.get("force_reader", {}))
         calibration_reader = str(calibration_force_cfg.get("reader", "placeholder")).lower()
         if not bool(calibration_force_cfg.get("enabled", False)) or calibration_reader == "placeholder":
@@ -170,7 +171,7 @@ def main() -> None:
         initial_calibration_force = capture_initial_force(calibration_force_monitor, calibration_cfg)
         print("[INFO] Calibration module enabled and calibration force reader loaded successfully.", flush=True)
     else:
-        print("[INFO] Calibration module disabled.", flush=True)
+        print("[INFO] Force calibration disabled; calibration force reader not loaded.", flush=True)
 
     client = JsonLineClient(
         str(runtime.get("host", "127.0.0.1")),

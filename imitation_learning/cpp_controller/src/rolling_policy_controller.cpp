@@ -118,6 +118,8 @@ struct Options {
   bool orientation_filter_enabled = true;
   double orientation_filter_cutoff_hz = 1.0;
   bool calibration_enabled = false;
+  bool calibration_orientation_enabled = true;
+  bool calibration_force_enabled = true;
   int calibration_interval_inferences = 3;
   double calibration_force_tolerance = 0.5;
   double calibration_z_gain = 0.0002;
@@ -826,6 +828,8 @@ void PrintUsage(const char* argv0) {
       << "  --disable-orientation-filter\n"
       << "  --orientation-filter-cutoff-hz <hz> Default: 1.0\n"
       << "  --enable-calibration\n"
+      << "  --disable-calibration-orientation\n"
+      << "  --disable-calibration-force\n"
       << "  --calibration-interval-inferences <n> Default: 3\n"
       << "  --calibration-force-tolerance <N>   Default: 0.5\n"
       << "  --calibration-z-gain <m/N>          Default: 0.0002\n"
@@ -884,6 +888,10 @@ Options ParseArgs(int argc, char** argv) {
       opt.orientation_filter_cutoff_hz = std::stod(require_value(arg));
     } else if (arg == "--enable-calibration") {
       opt.calibration_enabled = true;
+    } else if (arg == "--disable-calibration-orientation") {
+      opt.calibration_orientation_enabled = false;
+    } else if (arg == "--disable-calibration-force") {
+      opt.calibration_force_enabled = false;
     } else if (arg == "--calibration-interval-inferences") {
       opt.calibration_interval_inferences = std::stoi(require_value(arg));
     } else if (arg == "--calibration-force-tolerance") {
@@ -1004,10 +1012,14 @@ int main(int argc, char** argv) {
     auto last_force_request_time = std::chrono::steady_clock::now();
 
     if (opt.calibration_enabled) {
-      std::cout << "[INFO] Calibration enabled. Initial EE orientation captured: quaternion_xyzw=["
-                << initial_orientation.x << ", " << initial_orientation.y << ", "
-                << initial_orientation.z << ", " << initial_orientation.w << "]\n";
-      if (opt.use_probe_reference) {
+      std::cout << "[INFO] Calibration enabled: orientation=" << opt.calibration_orientation_enabled
+                << " force=" << opt.calibration_force_enabled << "\n";
+      if (opt.calibration_orientation_enabled) {
+        std::cout << "[INFO] Initial EE orientation captured: quaternion_xyzw=["
+                  << initial_orientation.x << ", " << initial_orientation.y << ", "
+                  << initial_orientation.z << ", " << initial_orientation.w << "]\n";
+      }
+      if (opt.calibration_orientation_enabled && opt.use_probe_reference) {
         std::cout << "[INFO] Probe-reference calibration enabled. Initial probe orientation captured: quaternion_xyzw=["
                   << initial_probe_pose.q.x << ", " << initial_probe_pose.q.y << ", "
                   << initial_probe_pose.q.z << ", " << initial_probe_pose.q.w << "]\n";
@@ -1039,7 +1051,7 @@ int main(int argc, char** argv) {
         latest_force_request_id = shared_state->latest_force_request_id;
       }
 
-      if (opt.calibration_enabled && !initial_fz_N.has_value() && calibration_initial_fz_N.has_value()) {
+      if (opt.calibration_enabled && opt.calibration_force_enabled && !initial_fz_N.has_value() && calibration_initial_fz_N.has_value()) {
         initial_fz_N = *calibration_initial_fz_N;
         std::cout << "[INFO] Calibration force reference received by controller: Fz="
                   << *initial_fz_N << " N\n";
@@ -1064,12 +1076,14 @@ int main(int argc, char** argv) {
         active_trajectory = std::vector<TrajectorySample>{TrajectorySample{0.0, commanded_pose}};
         trajectory_elapsed_s = 0.0;
         if (opt.calibration_enabled && completed_inferences >= opt.calibration_interval_inferences) {
-          calibration_phase = CalibrationPhase::kOrientation;
-          if (opt.use_probe_reference) {
+          calibration_phase = opt.calibration_orientation_enabled
+              ? CalibrationPhase::kOrientation
+              : (opt.calibration_force_enabled ? CalibrationPhase::kForce : CalibrationPhase::kNone);
+          if (opt.calibration_orientation_enabled && opt.use_probe_reference) {
             const Pose current_probe_pose = MatrixToPose(Multiply(PoseToMatrix(commanded_pose), probe_to_ee));
             calibration_target = MatrixToPose(Multiply(
                 PoseToMatrix(Pose{current_probe_pose.p, initial_probe_pose.q}), ee_to_probe));
-          } else {
+          } else if (opt.calibration_orientation_enabled) {
             calibration_target = commanded_pose;
             calibration_target.q = initial_orientation;
           }
@@ -1077,8 +1091,16 @@ int main(int argc, char** argv) {
           calibration_total_z = 0.0;
           calibration_z_target_pending = false;
           calibration_z_limit_logged = false;
-          std::cout << "[INFO] Starting calibration: orientation phase at fixed position.\n";
-          next_mode = ControllerMode::kCalibrating;
+          if (calibration_phase == CalibrationPhase::kOrientation) {
+            std::cout << "[INFO] Starting calibration: probe orientation phase at fixed probe position.\n";
+            next_mode = ControllerMode::kCalibrating;
+          } else if (calibration_phase == CalibrationPhase::kForce) {
+            calibration_target = commanded_pose;
+            std::cout << "[INFO] Starting calibration: EE-z force phase.\n";
+            next_mode = ControllerMode::kCalibrating;
+          } else {
+            completed_inferences = 0;
+          }
         }
       }
       if (calibration_phase == CalibrationPhase::kNone && active_seq < 0 && pending_infer_request_id < 0 && python_ready) {
@@ -1125,17 +1147,16 @@ int main(int argc, char** argv) {
           calibration_settled_cycles = 0;
         }
         if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {
-          calibration_phase = CalibrationPhase::kForce;
+          calibration_phase = opt.calibration_force_enabled ? CalibrationPhase::kForce : CalibrationPhase::kNone;
           calibration_settled_cycles = 0;
-          if (opt.use_probe_reference) {
-            const Pose current_probe_pose = MatrixToPose(Multiply(PoseToMatrix(commanded_pose), probe_to_ee));
-            calibration_target = MatrixToPose(Multiply(
-                PoseToMatrix(Pose{current_probe_pose.p, initial_probe_pose.q}), ee_to_probe));
+          if (opt.calibration_force_enabled) {
+            // The force loop is explicitly an EE-local-z loop, independent of the probe frame.
+            calibration_target = commanded_pose;
+            std::cout << "[INFO] Calibration orientation complete. Starting EE-z force phase.\n";
           } else {
-            calibration_target.p = commanded_pose.p;
+            completed_inferences = 0;
+            std::cout << "[INFO] Calibration orientation complete. Force phase disabled.\n";
           }
-          std::cout << "[INFO] Calibration orientation complete. Starting "
-                    << (opt.use_probe_reference ? "probe-z" : "EE-z") << " force phase.\n";
         }
       } else if (calibration_phase == CalibrationPhase::kForce) {
         target_pose = calibration_target;
@@ -1180,14 +1201,8 @@ int main(int argc, char** argv) {
               calibration_z_limit_logged = true;
               std::cerr << "[WARN] Calibration z correction reached max_total_z_correction_m while force is out of range.\n";
             }
-            if (opt.use_probe_reference) {
-              Pose target_probe_pose = MatrixToPose(Multiply(PoseToMatrix(calibration_target), probe_to_ee));
-              target_probe_pose.p = target_probe_pose.p + RotateVector(initial_probe_pose.q, Vec3{0.0, 0.0, 1.0}) * z_step;
-              target_probe_pose.q = initial_probe_pose.q;
-              calibration_target = MatrixToPose(Multiply(PoseToMatrix(target_probe_pose), ee_to_probe));
-            } else {
-              calibration_target.p = calibration_target.p + RotateVector(initial_orientation, Vec3{0.0, 0.0, 1.0}) * z_step;
-            }
+            calibration_target.p = calibration_target.p +
+                RotateVector(calibration_target.q, Vec3{0.0, 0.0, 1.0}) * z_step;
             calibration_z_target_pending = std::fabs(z_step) >= 1e-9;
           }
           if (calibration_settled_cycles >= opt.calibration_force_settle_cycles) {

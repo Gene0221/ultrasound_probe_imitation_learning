@@ -137,8 +137,14 @@ def main() -> None:
 
     if bool(calibration.get("enabled", False)):
         command.append("--enable-calibration")
+    orientation_enabled = bool(calibration.get("orientation_enabled", True))
+    force_enabled = bool(calibration.get("force_enabled", True))
+    if not orientation_enabled:
+        command.append("--disable-calibration-orientation")
+    if not force_enabled:
+        command.append("--disable-calibration-force")
     contact_frame = calibration.get("contact_frame", {})
-    if bool(contact_frame.get("enabled", False)):
+    if orientation_enabled and bool(contact_frame.get("enabled", False)):
         transform_csv, report_path, transform_key, transform_matrix = load_probe_to_ee_transform(contact_frame)
         translation = [transform_matrix[row][3] for row in range(3)]
         print(
@@ -150,8 +156,8 @@ def main() -> None:
         add_flag(command, "--probe-to-ee-transform", transform_csv)
     add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))
     add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
-    add_flag(command, "--calibration-z-gain", calibration.get("z_correction_gain_m_per_N", 0.0002))
-    add_flag(command, "--calibration-z-sign", calibration.get("z_correction_sign", 1.0))
+    add_flag(command, "--calibration-z-gain", calibration.get("ee_z_correction_gain_m_per_N", 0.0002))
+    add_flag(command, "--calibration-z-sign", calibration.get("ee_z_correction_sign", 1.0))
     add_flag(command, "--calibration-max-z-step", calibration.get("max_z_step_m", 0.0005))
     add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
     add_flag(command, "--calibration-z-settle-tolerance", calibration.get("z_position_settle_tolerance_m", 0.0001))

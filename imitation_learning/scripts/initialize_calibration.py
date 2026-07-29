@@ -25,8 +25,9 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     calibration_cfg = config.get("calibration", {})
-    if not bool(calibration_cfg.get("enabled", False)):
-        print("[INFO] Calibration module disabled; guided initialization skipped.", flush=True)
+    force_enabled = bool(calibration_cfg.get("enabled", False)) and bool(calibration_cfg.get("force_enabled", True))
+    if not force_enabled:
+        print("[INFO] Force calibration disabled; guided force initialization skipped.", flush=True)
         return
 
     reader_cfg = dict(calibration_cfg.get("force_reader", {}))
