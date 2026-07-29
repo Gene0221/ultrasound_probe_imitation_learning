@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 from typing import Any
 
 import yaml
@@ -142,7 +143,8 @@ def main() -> None:
         translation = [transform_matrix[row][3] for row in range(3)]
         print(
             f"[INFO] Probe reference transform loaded: report={report_path} key={transform_key} "
-            f"translation_m={translation}"
+            f"translation_m={translation}",
+            file=sys.stderr,
         )
         command.append("--use-probe-reference")
         add_flag(command, "--probe-to-ee-transform", transform_csv)
