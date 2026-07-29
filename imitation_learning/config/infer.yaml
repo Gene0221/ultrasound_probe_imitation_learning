@@ -124,7 +124,7 @@ calibration:
   enabled: true
   contact_frame:
     enabled: false
-    transform_file: cali/estimated_transforms.T_tag_to_flange.json
+    transform_file: cali/tag2flange_calibration_report.json
     transform_key: estimated_transforms.T_flange_to_tag
   initialization:
     tare_enabled: true
