@@ -125,6 +125,8 @@ calibration:
   settle_cycles: 3
   orientation:
     enabled: true
+    # Only correct rotations about probe/EE local X and Y; preserve rotation about local Z.
+    xy_only: true
     # Signed distance from the EE origin to the probe contact point along EE local +Z.
     probe_z_offset_m: 0.0
     tolerance_rad: 0.01

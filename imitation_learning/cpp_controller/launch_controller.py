@@ -110,6 +110,8 @@ def main() -> None:
         command.append("--enable-calibration")
     if not orientation_enabled:
         command.append("--disable-calibration-orientation")
+    elif bool(orientation_calibration.get("xy_only", False)):
+        command.append("--calibration-orientation-xy-only")
     if not force_enabled:
         command.append("--disable-calibration-force")
     add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))

@@ -119,6 +119,7 @@ struct Options {
   double orientation_filter_cutoff_hz = 1.0;
   bool calibration_enabled = false;
   bool calibration_orientation_enabled = true;
+  bool calibration_orientation_xy_only = false;
   bool calibration_force_enabled = true;
   int calibration_interval_inferences = 3;
   double calibration_force_tolerance = 0.5;
@@ -296,11 +297,6 @@ Quaternion Slerp(Quaternion a, Quaternion b, double t) {
       a.z * w1 + b.z * w2,
       a.w * w1 + b.w * w2,
   });
-}
-
-double QuaternionAngle(const Quaternion& q) {
-  const Quaternion unit = Normalize(q);
-  return 2.0 * std::acos(Clamp(std::fabs(unit.w), -1.0, 1.0));
 }
 
 Vec3 QuaternionToRotationVector(Quaternion q) {
@@ -804,6 +800,7 @@ void PrintUsage(const char* argv0) {
       << "  --orientation-filter-cutoff-hz <hz> Default: 1.0\n"
       << "  --enable-calibration\n"
       << "  --disable-calibration-orientation\n"
+      << "  --calibration-orientation-xy-only\n"
       << "  --disable-calibration-force\n"
       << "  --calibration-interval-inferences <n> Default: 3\n"
       << "  --calibration-probe-z-offset <m>    Default: 0.0\n"
@@ -864,6 +861,8 @@ Options ParseArgs(int argc, char** argv) {
       opt.calibration_enabled = true;
     } else if (arg == "--disable-calibration-orientation") {
       opt.calibration_orientation_enabled = false;
+    } else if (arg == "--calibration-orientation-xy-only") {
+      opt.calibration_orientation_xy_only = true;
     } else if (arg == "--disable-calibration-force") {
       opt.calibration_force_enabled = false;
     } else if (arg == "--calibration-interval-inferences") {
@@ -1045,8 +1044,17 @@ int main(int argc, char** argv) {
               ? CalibrationPhase::kOrientation
               : (opt.calibration_force_enabled ? CalibrationPhase::kForce : CalibrationPhase::kNone);
           if (opt.calibration_orientation_enabled) {
+            Quaternion target_orientation = initial_probe_pose.q;
+            if (opt.calibration_orientation_xy_only) {
+              const Quaternion relative_orientation =
+                  Multiply(Conjugate(initial_probe_pose.q), measured_pose.q);
+              const Vec3 relative_rotvec = QuaternionToRotationVector(relative_orientation);
+              target_orientation = Multiply(
+                  initial_probe_pose.q,
+                  RotationVectorToQuaternion(Vec3{0.0, 0.0, relative_rotvec.z}));
+            }
             calibration_target = EePoseForFixedProbePosition(
-                measured_pose, initial_probe_pose.q, opt.calibration_probe_z_offset);
+                measured_pose, target_orientation, opt.calibration_probe_z_offset);
           }
           calibration_settled_cycles = 0;
           calibration_total_z = 0.0;
@@ -1097,9 +1105,12 @@ int main(int argc, char** argv) {
         target_pose = calibration_target;
         const Quaternion current_orientation = measured_pose.q;
         const Quaternion reference_orientation = initial_probe_pose.q;
-        const Quaternion orientation_error_q = Multiply(reference_orientation, Conjugate(current_orientation));
-        const bool orientation_in_range =
-            QuaternionAngle(orientation_error_q) <= opt.calibration_orientation_tolerance;
+        const Quaternion orientation_error_q = Multiply(Conjugate(reference_orientation), current_orientation);
+        const Vec3 orientation_error = QuaternionToRotationVector(orientation_error_q);
+        const double orientation_error_norm = opt.calibration_orientation_xy_only
+            ? Norm(Vec3{orientation_error.x, orientation_error.y, 0.0})
+            : Norm(orientation_error);
+        const bool orientation_in_range = orientation_error_norm <= opt.calibration_orientation_tolerance;
         if (orientation_in_range) {
           calibration_settled_cycles += 1;
         } else {
