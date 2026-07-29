@@ -53,7 +53,7 @@ def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> tuple[str, Path
     report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise ValueError(f"Expected a mapping in calibration report: {report_path}")
-    transform_key = str(contact_frame.get("transform_key", "estimated_transforms.T_tag_to_flange"))
+    transform_key = str(contact_frame.get("transform_key", "estimated_transforms.T_flange_to_tag"))
     matrix = read_nested_mapping_value(report, transform_key)
     if not isinstance(matrix, list) or len(matrix) != 4 or any(not isinstance(row, list) or len(row) != 4 for row in matrix):
         raise ValueError("Probe-to-EE transform must be a 4x4 matrix.")
