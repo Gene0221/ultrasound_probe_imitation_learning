@@ -4,7 +4,6 @@ import argparse
 from pathlib import Path
 import shlex
 import subprocess
-import sys
 from typing import Any
 
 import yaml
@@ -33,38 +32,6 @@ def parse_args() -> argparse.Namespace:
 
 def add_flag(command: list[str], name: str, value: Any) -> None:
     command.extend([name, str(value)])
-
-
-def read_nested_mapping_value(payload: dict[str, Any], dotted_key: str) -> Any:
-    value: Any = payload
-    for key in dotted_key.split("."):
-        if not isinstance(value, dict) or key not in value:
-            raise ValueError(f"Missing transform key '{dotted_key}' in calibration report.")
-        value = value[key]
-    return value
-
-
-def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> tuple[str, Path, str, list[list[float]]]:
-    file_value = contact_frame.get("transform_file")
-    if not file_value:
-        raise ValueError("calibration.contact_frame.transform_file is required when contact_frame.enabled=true.")
-    report_path = Path(str(file_value))
-    if not report_path.is_absolute():
-        report_path = (PROJECT_ROOT / report_path).resolve()
-    report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
-    if not isinstance(report, dict):
-        raise ValueError(f"Expected a mapping in calibration report: {report_path}")
-    transform_key = str(contact_frame.get("transform_key", "estimated_transforms.T_flange_to_tag"))
-    matrix = read_nested_mapping_value(report, transform_key)
-    if not isinstance(matrix, list) or len(matrix) != 4 or any(not isinstance(row, list) or len(row) != 4 for row in matrix):
-        raise ValueError("Probe-to-EE transform must be a 4x4 matrix.")
-    normalized_matrix = [[float(value) for value in row] for row in matrix]
-    return (
-        ",".join(str(value) for row in normalized_matrix for value in row),
-        report_path,
-        transform_key,
-        normalized_matrix,
-    )
 
 
 def active_policy_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -108,6 +75,8 @@ def main() -> None:
     limits = motion.get("limits", {})
     online_filter = motion.get("online_filter", {})
     calibration = config.get("calibration", {})
+    orientation_calibration = calibration.get("orientation", {})
+    force_calibration = calibration.get("force", {})
     policy_cfg = active_policy_config(config)
     franka = config.get("franka", {})
     robot_ip = args.robot_ip or franka.get("robot_ip")
@@ -135,36 +104,27 @@ def main() -> None:
     else:
         add_flag(command, "--orientation-filter-cutoff-hz", online_filter.get("orientation_cutoff_hz", 1.0))
 
-    if bool(calibration.get("enabled", False)):
+    orientation_enabled = bool(orientation_calibration.get("enabled", False))
+    force_enabled = bool(force_calibration.get("enabled", False))
+    if orientation_enabled or force_enabled:
         command.append("--enable-calibration")
-    orientation_enabled = bool(calibration.get("orientation_enabled", True))
-    force_enabled = bool(calibration.get("force_enabled", True))
     if not orientation_enabled:
         command.append("--disable-calibration-orientation")
     if not force_enabled:
         command.append("--disable-calibration-force")
-    contact_frame = calibration.get("contact_frame", {})
-    if orientation_enabled and bool(contact_frame.get("enabled", False)):
-        transform_csv, report_path, transform_key, transform_matrix = load_probe_to_ee_transform(contact_frame)
-        translation = [transform_matrix[row][3] for row in range(3)]
-        print(
-            f"[INFO] Probe reference transform loaded: report={report_path} key={transform_key} "
-            f"translation_m={translation}",
-            file=sys.stderr,
-        )
-        command.append("--use-probe-reference")
-        add_flag(command, "--probe-to-ee-transform", transform_csv)
     add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))
-    add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
-    add_flag(command, "--calibration-z-gain", calibration.get("ee_z_correction_gain_m_per_N", 0.0002))
-    add_flag(command, "--calibration-z-sign", calibration.get("ee_z_correction_sign", 1.0))
-    add_flag(command, "--calibration-max-z-step", calibration.get("max_z_step_m", 0.0005))
-    add_flag(command, "--calibration-max-total-z", calibration.get("max_total_z_correction_m", 0.01))
-    add_flag(command, "--calibration-z-settle-tolerance", calibration.get("z_position_settle_tolerance_m", 0.0001))
-    add_flag(command, "--calibration-z-settle-velocity", calibration.get("z_position_settle_velocity_mps", 0.001))
-    add_flag(command, "--calibration-orientation-tolerance", calibration.get("orientation_tolerance_rad", 0.01))
-    add_flag(command, "--calibration-force-settle-cycles", calibration.get("force_settle_cycles", 3))
-    add_flag(command, "--calibration-force-sample-hz", calibration.get("force_sample_hz", 30.0))
+    add_flag(command, "--calibration-probe-z-offset", orientation_calibration.get("probe_z_offset_m", 0.0))
+    add_flag(command, "--calibration-force-tolerance", force_calibration.get("tolerance_N", 0.5))
+    ee_z = force_calibration.get("ee_z", {})
+    add_flag(command, "--calibration-z-gain", ee_z.get("gain_m_per_N", 0.0002))
+    add_flag(command, "--calibration-z-sign", ee_z.get("sign", 1.0))
+    add_flag(command, "--calibration-max-z-step", ee_z.get("max_step_m", 0.0005))
+    add_flag(command, "--calibration-max-total-z", ee_z.get("max_total_correction_m", 0.01))
+    add_flag(command, "--calibration-z-settle-tolerance", ee_z.get("position_settle_tolerance_m", 0.0001))
+    add_flag(command, "--calibration-z-settle-velocity", ee_z.get("position_settle_velocity_mps", 0.001))
+    add_flag(command, "--calibration-orientation-tolerance", orientation_calibration.get("tolerance_rad", 0.01))
+    add_flag(command, "--calibration-force-settle-cycles", calibration.get("settle_cycles", 3))
+    add_flag(command, "--calibration-force-sample-hz", force_calibration.get("sample_hz", 30.0))
 
     print(" ".join(shlex.quote(item) for item in command))
     if not args.print_only:

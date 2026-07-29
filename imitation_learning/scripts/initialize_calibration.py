@@ -25,20 +25,21 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     calibration_cfg = config.get("calibration", {})
-    force_enabled = bool(calibration_cfg.get("enabled", False)) and bool(calibration_cfg.get("force_enabled", True))
+    force_cfg = calibration_cfg.get("force", {})
+    force_enabled = bool(force_cfg.get("enabled", False))
     if not force_enabled:
         print("[INFO] Force calibration disabled; guided force initialization skipped.", flush=True)
         return
 
-    reader_cfg = dict(calibration_cfg.get("force_reader", {}))
+    reader_cfg = dict(force_cfg.get("reader", {}))
     reader = str(reader_cfg.get("reader", "placeholder")).lower()
     if not bool(reader_cfg.get("enabled", False)) or reader != "kwr75b_serial":
         raise RuntimeError(
-            "Guided calibration initialization requires calibration.force_reader "
+            "Guided calibration initialization requires calibration.force.reader "
             "to be an enabled kwr75b_serial reader."
         )
 
-    initialization_cfg = calibration_cfg.get("initialization", {})
+    initialization_cfg = force_cfg.get("initialization", {})
     tare_enabled = bool(initialization_cfg.get("tare_enabled", True))
     tare_samples = max(1, int(initialization_cfg.get("tare_samples", 100)))
     tare_settle_s = max(0.0, float(initialization_cfg.get("tare_settle_s", 1.0)))

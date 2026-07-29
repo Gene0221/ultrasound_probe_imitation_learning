@@ -121,44 +121,43 @@ force_safety:
     Mz_Nm: 0.8
 
 calibration:
-  enabled: true
-  orientation_enabled: true
-  force_enabled: true
-  contact_frame:
-    enabled: false
-    transform_file: cali/tag2flange_calibration_report.json
-    transform_key: estimated_transforms.T_flange_to_tag
-  initialization:
-    tare_enabled: true
-    tare_samples: 100
-    tare_settle_s: 1.0
-    prompt_for_contact: true
   inferences_per_cycle: 3
-  force_axis: Fz_N
-  force_tolerance_N: 0.5
-  initial_force_samples: 5
-  initial_force_timeout_s: 3.0
-  # Force correction always moves along the EE local z axis.
-  ee_z_correction_gain_m_per_N: 0.0002
-  ee_z_correction_sign: -1.0
-  max_z_step_m: 0.0005
-  max_total_z_correction_m: 0.01
-  z_position_settle_tolerance_m: 0.0001
-  z_position_settle_velocity_mps: 0.001
-  orientation_tolerance_rad: 0.01
-  force_settle_cycles: 3
-  force_sample_hz: 30.0
-  force_reader:
+  settle_cycles: 3
+  orientation:
     enabled: true
-    reader: kwr75b_serial # placeholder or kwr75b_serial
-    serial:
-      port: AUTO
-      serial_number: AB0KU8NU
-      baudrate: 460800
-      request_mode: true
-      debug: false
-      sample_timeout_s: 0.5
-      bias_file: ../data_collection/6D_force_grasping/config/zero_bias.json
+    # Signed distance from the EE origin to the probe contact point along EE local +Z.
+    probe_z_offset_m: 0.0
+    tolerance_rad: 0.01
+  force:
+    enabled: true
+    axis: Fz_N
+    tolerance_N: 0.5
+    initial_samples: 5
+    initial_timeout_s: 3.0
+    sample_hz: 30.0
+    ee_z:
+      gain_m_per_N: 0.0002
+      sign: -1.0
+      max_step_m: 0.0005
+      max_total_correction_m: 0.01
+      position_settle_tolerance_m: 0.0001
+      position_settle_velocity_mps: 0.001
+    initialization:
+      tare_enabled: true
+      tare_samples: 100
+      tare_settle_s: 1.0
+      prompt_for_contact: true
+    reader:
+      enabled: true
+      reader: kwr75b_serial # placeholder or kwr75b_serial
+      serial:
+        port: AUTO
+        serial_number: AB0KU8NU
+        baudrate: 460800
+        request_mode: true
+        debug: false
+        sample_timeout_s: 0.5
+        bias_file: ../data_collection/6D_force_grasping/config/zero_bias.json
 
 franka_safety:
   enable_collision_behavior: true

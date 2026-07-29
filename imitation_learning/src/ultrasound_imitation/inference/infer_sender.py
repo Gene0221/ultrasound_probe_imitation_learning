@@ -99,14 +99,14 @@ def wait_for_start_signal(path: Path) -> None:
 def read_force_axis(sample, axis: str) -> float:
     values = sample.as_dict()
     if axis not in values:
-        raise ValueError(f"Unsupported calibration.force_axis: {axis}")
+        raise ValueError(f"Unsupported calibration.force.axis: {axis}")
     return float(values[axis])
 
 
-def capture_initial_force(force_monitor: ForceSafetyMonitor, calibration_cfg: dict[str, Any]) -> float:
-    axis = str(calibration_cfg.get("force_axis", "Fz_N"))
-    samples_required = max(1, int(calibration_cfg.get("initial_force_samples", 5)))
-    timeout_s = float(calibration_cfg.get("initial_force_timeout_s", 3.0))
+def capture_initial_force(force_monitor: ForceSafetyMonitor, force_cfg: dict[str, Any]) -> float:
+    axis = str(force_cfg.get("axis", "Fz_N"))
+    samples_required = max(1, int(force_cfg.get("initial_samples", 5)))
+    timeout_s = float(force_cfg.get("initial_timeout_s", 3.0))
     deadline = time.monotonic() + timeout_s
     values: list[float] = []
     while len(values) < samples_required and time.monotonic() < deadline:
@@ -133,8 +133,8 @@ def main() -> None:
     motion = active_motion_config(config, policy_type)
     force_cfg = config.get("force_safety", {})
     calibration_cfg = config.get("calibration", {})
-    calibration_enabled = bool(calibration_cfg.get("enabled", False))
-    calibration_force_enabled = calibration_enabled and bool(calibration_cfg.get("force_enabled", True))
+    calibration_force_cfg = dict(calibration_cfg.get("force", {}))
+    calibration_force_enabled = bool(calibration_force_cfg.get("enabled", False))
 
     print(f"[INFO] Config: {Path(args.config).resolve()}", flush=True)
     print(
@@ -158,17 +158,17 @@ def main() -> None:
     calibration_force_monitor: ForceSafetyMonitor | None = None
     initial_calibration_force: float | None = None
     if calibration_force_enabled:
-        calibration_force_cfg = dict(calibration_cfg.get("force_reader", {}))
-        calibration_reader = str(calibration_force_cfg.get("reader", "placeholder")).lower()
-        if not bool(calibration_force_cfg.get("enabled", False)) or calibration_reader == "placeholder":
-            raise RuntimeError("calibration.enabled=true requires calibration.force_reader.enabled=true with a real reader.")
-        calibration_force_monitor = ForceSafetyMonitor(calibration_force_cfg)
+        calibration_reader_cfg = dict(calibration_force_cfg.get("reader", {}))
+        calibration_reader = str(calibration_reader_cfg.get("reader", "placeholder")).lower()
+        if not bool(calibration_reader_cfg.get("enabled", False)) or calibration_reader == "placeholder":
+            raise RuntimeError("calibration.force.enabled=true requires calibration.force.reader.enabled=true with a real reader.")
+        calibration_force_monitor = ForceSafetyMonitor(calibration_reader_cfg)
         print(
-            f"[INFO] Calibration force reader: enabled={calibration_force_cfg.get('enabled', False)} "
-            f"reader={calibration_force_cfg.get('reader', 'placeholder')}",
+            f"[INFO] Calibration force reader: enabled={calibration_reader_cfg.get('enabled', False)} "
+            f"reader={calibration_reader_cfg.get('reader', 'placeholder')}",
             flush=True,
         )
-        initial_calibration_force = capture_initial_force(calibration_force_monitor, calibration_cfg)
+        initial_calibration_force = capture_initial_force(calibration_force_monitor, calibration_force_cfg)
         print("[INFO] Calibration module enabled and calibration force reader loaded successfully.", flush=True)
     else:
         print("[INFO] Force calibration disabled; calibration force reader not loaded.", flush=True)
@@ -189,7 +189,7 @@ def main() -> None:
     if wait_enabled:
         wait_for_start_signal(start_signal_file)
 
-    calibration_axis = str(calibration_cfg.get("force_axis", "Fz_N"))
+    calibration_axis = str(calibration_force_cfg.get("axis", "Fz_N"))
     seq = 0
     pending_image = first_image
     client.send({"mode": "ready", "timestamp_s": time.time()})
