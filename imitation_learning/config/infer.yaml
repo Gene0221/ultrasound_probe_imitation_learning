@@ -82,8 +82,8 @@ motion:
       max_rotation_acceleration_radps2: 0.5
 
   diffusion:
-    action_dt_s: 0.5
-    speed_scale: 0.25
+    action_dt_s: 0.4
+    speed_scale: 0.5
     execute_steps_per_inference: 5
     ramp_time_s: 3.0
 
@@ -122,6 +122,8 @@ force_safety:
 
 calibration:
   enabled: true
+  orientation_enabled: true
+  force_enabled: true
   contact_frame:
     enabled: false
     transform_file: cali/tag2flange_calibration_report.json
@@ -136,10 +138,13 @@ calibration:
   force_tolerance_N: 0.5
   initial_force_samples: 5
   initial_force_timeout_s: 3.0
-  z_correction_gain_m_per_N: 0.0002
-  z_correction_sign: -1.0
+  # Force correction always moves along the EE local z axis.
+  ee_z_correction_gain_m_per_N: 0.0002
+  ee_z_correction_sign: -1.0
   max_z_step_m: 0.0005
   max_total_z_correction_m: 0.01
+  z_position_settle_tolerance_m: 0.0001
+  z_position_settle_velocity_mps: 0.001
   orientation_tolerance_rad: 0.01
   force_settle_cycles: 3
   force_sample_hz: 30.0
