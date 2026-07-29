@@ -124,8 +124,8 @@ calibration:
   enabled: true
   contact_frame:
     enabled: false
-    transform_file: # tag2flange_calibration_report.json path
-    transform_key: estimated_transforms.T_tag_to_flange
+    transform_file: cali/estimated_transforms.T_tag_to_flange.json
+    transform_key: estimated_transforms.T_flange_to_tag
   initialization:
     tare_enabled: true
     tare_samples: 100
@@ -137,7 +137,7 @@ calibration:
   initial_force_samples: 5
   initial_force_timeout_s: 3.0
   z_correction_gain_m_per_N: 0.0002
-  z_correction_sign: 1.0
+  z_correction_sign: -1.0
   max_z_step_m: 0.0005
   max_total_z_correction_m: 0.01
   orientation_tolerance_rad: 0.01
