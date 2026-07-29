@@ -1000,6 +1000,9 @@ int main(int argc, char** argv) {
         std::cout << "[INFO] Probe-reference calibration enabled. Initial probe orientation captured: quaternion_xyzw=["
                   << initial_probe_pose.q.x << ", " << initial_probe_pose.q.y << ", "
                   << initial_probe_pose.q.z << ", " << initial_probe_pose.q.w << "]\n";
+        std::cout << "[INFO] Probe-to-EE transform received: translation_m=["
+                  << probe_to_ee(0, 3) << ", " << probe_to_ee(1, 3) << ", "
+                  << probe_to_ee(2, 3) << "]\n";
       }
     } else {
       std::cout << "[INFO] Calibration disabled.\n";

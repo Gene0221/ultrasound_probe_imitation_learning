@@ -43,7 +43,7 @@ def read_nested_mapping_value(payload: dict[str, Any], dotted_key: str) -> Any:
     return value
 
 
-def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> str:
+def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> tuple[str, Path, str, list[list[float]]]:
     file_value = contact_frame.get("transform_file")
     if not file_value:
         raise ValueError("calibration.contact_frame.transform_file is required when contact_frame.enabled=true.")
@@ -53,10 +53,17 @@ def load_probe_to_ee_transform(contact_frame: dict[str, Any]) -> str:
     report = yaml.safe_load(report_path.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise ValueError(f"Expected a mapping in calibration report: {report_path}")
-    matrix = read_nested_mapping_value(report, str(contact_frame.get("transform_key", "estimated_transforms.T_tag_to_flange")))
+    transform_key = str(contact_frame.get("transform_key", "estimated_transforms.T_tag_to_flange"))
+    matrix = read_nested_mapping_value(report, transform_key)
     if not isinstance(matrix, list) or len(matrix) != 4 or any(not isinstance(row, list) or len(row) != 4 for row in matrix):
         raise ValueError("Probe-to-EE transform must be a 4x4 matrix.")
-    return ",".join(str(float(value)) for row in matrix for value in row)
+    normalized_matrix = [[float(value) for value in row] for row in matrix]
+    return (
+        ",".join(str(value) for row in normalized_matrix for value in row),
+        report_path,
+        transform_key,
+        normalized_matrix,
+    )
 
 
 def active_policy_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -131,8 +138,14 @@ def main() -> None:
         command.append("--enable-calibration")
     contact_frame = calibration.get("contact_frame", {})
     if bool(contact_frame.get("enabled", False)):
+        transform_csv, report_path, transform_key, transform_matrix = load_probe_to_ee_transform(contact_frame)
+        translation = [transform_matrix[row][3] for row in range(3)]
+        print(
+            f"[INFO] Probe reference transform loaded: report={report_path} key={transform_key} "
+            f"translation_m={translation}"
+        )
         command.append("--use-probe-reference")
-        add_flag(command, "--probe-to-ee-transform", load_probe_to_ee_transform(contact_frame))
+        add_flag(command, "--probe-to-ee-transform", transform_csv)
     add_flag(command, "--calibration-interval-inferences", calibration.get("inferences_per_cycle", 3))
     add_flag(command, "--calibration-force-tolerance", calibration.get("force_tolerance_N", 0.5))
     add_flag(command, "--calibration-z-gain", calibration.get("z_correction_gain_m_per_N", 0.0002))
