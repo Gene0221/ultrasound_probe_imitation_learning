@@ -147,7 +147,7 @@ def build_session_samples(session_dir: Path, config: dict[str, Any], *, include_
     alignment = config["alignment"]
     horizon = int(config["dataset"].get("action_horizon", 20))
     ultrasound_path = session_dir / layout.get("ultrasound_subdir", "ultrasound") / layout.get("ultrasound_timestamps_file", "timestamps.jsonl")
-    pose_path = session_dir / layout.get("pose_subdir", "transformed_pose") / layout.get("pose_file", "flange_pose_deltas.jsonl")
+    pose_path = session_dir / layout.get("pose_subdir", "visual_pose") / layout.get("pose_file", "tag_pose_deltas.jsonl")
     force_path = session_dir / layout.get("force_subdir", "predicted_force") / layout.get("force_file", "predicted_force.jsonl")
     if not ultrasound_path.exists() or not pose_path.exists():
         return [], {"missing_required_files": 1}

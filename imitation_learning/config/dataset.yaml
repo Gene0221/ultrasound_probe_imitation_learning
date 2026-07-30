@@ -9,8 +9,8 @@ session_layout:
   ultrasound_subdir: ultrasound
   ultrasound_timestamps_file: timestamps.jsonl
   ultrasound_images_subdir: images
-  pose_subdir: transformed_pose
-  pose_file: flange_pose_deltas.jsonl
+  pose_subdir: visual_pose
+  pose_file: tag_pose_deltas.jsonl
   force_subdir: predicted_force
   force_file: predicted_force.jsonl
 

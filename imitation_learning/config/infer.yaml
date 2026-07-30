@@ -66,6 +66,15 @@ motion:
     speed_scale: 0.4
     execute_steps_per_inference: 20
     ramp_time_s: 3.0
+    action_reference:
+      frame: probe
+      # T_ee_probe: transforms points from the probe/tag frame into the EE/flange frame relation
+      # used as T_probe = T_ee @ T_ee_probe. Replace this identity with the calibrated matrix.
+      ee_to_probe_transform:
+        - [1.0, 0.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0, 0.0]
+        - [0.0, 0.0, 1.0, 0.0]
+        - [0.0, 0.0, 0.0, 1.0]
 
     online_filter:
       enabled: true
@@ -86,6 +95,15 @@ motion:
     speed_scale: 0.5
     execute_steps_per_inference: 5
     ramp_time_s: 3.0
+    action_reference:
+      frame: probe
+      # T_ee_probe: transforms points from the probe/tag frame into the EE/flange frame relation
+      # used as T_probe = T_ee @ T_ee_probe. Replace this identity with the calibrated matrix.
+      ee_to_probe_transform:
+        - [1.0, 0.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0, 0.0]
+        - [0.0, 0.0, 1.0, 0.0]
+        - [0.0, 0.0, 0.0, 1.0]
 
     online_filter:
       enabled: true
@@ -128,7 +146,7 @@ calibration:
     # Only correct rotations about probe/EE local X and Y; preserve rotation about local Z.
     xy_only: true
     # Signed distance from the EE origin to the probe contact point along EE local +Z.
-    probe_z_offset_m: 0.0
+    probe_z_offset_m: 0.22
     tolerance_rad: 0.01
   force:
     enabled: true
@@ -141,7 +159,7 @@ calibration:
       gain_m_per_N: 0.0002
       sign: -1.0
       max_step_m: 0.0005
-      max_total_correction_m: 0.01
+      max_total_correction_m: 0.04
       position_settle_tolerance_m: 0.0001
       position_settle_velocity_mps: 0.001
     initialization:

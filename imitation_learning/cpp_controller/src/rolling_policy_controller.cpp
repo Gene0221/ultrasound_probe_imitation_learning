@@ -133,6 +133,12 @@ struct Options {
   int calibration_force_settle_cycles = 3;
   double calibration_force_sample_hz = 30.0;
   double calibration_probe_z_offset = 0.0;
+  bool policy_actions_in_probe_frame = false;
+  std::array<double, 16> policy_ee_to_probe{
+      1.0, 0.0, 0.0, 0.0,
+      0.0, 1.0, 0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0};
 };
 
 enum class ControllerMode {
@@ -479,7 +485,11 @@ std::vector<TrajectorySample> BuildTrajectory(const Pose& start_pose, const Poli
   samples.reserve(static_cast<std::size_t>(execute_steps + 1));
   samples.push_back(TrajectorySample{0.0, start_pose});
 
-  Matrix4 cumulative = PoseToMatrix(start_pose);
+  const Matrix4 ee_to_probe = RowMajorArrayToMatrix(opt.policy_ee_to_probe);
+  const Matrix4 probe_to_ee = InvertRigidTransform(ee_to_probe);
+  Matrix4 cumulative = opt.policy_actions_in_probe_frame
+      ? Multiply(PoseToMatrix(start_pose), ee_to_probe)
+      : PoseToMatrix(start_pose);
   Pose filtered_previous = start_pose;
   for (int i = 0; i < execute_steps; ++i) {
     Action action = chunk.actions[static_cast<std::size_t>(i)];
@@ -487,7 +497,10 @@ std::vector<TrajectorySample> BuildTrajectory(const Pose& start_pose, const Poli
     const Vec3 rotvec = LimitVectorNorm(QuaternionToRotationVector(action.rotation), opt.max_step_rotation);
     action.rotation = RotationVectorToQuaternion(rotvec);
     cumulative = Multiply(cumulative, ActionToMatrix(action));
-    const Pose raw_pose = MatrixToPose(cumulative);
+    const Matrix4 ee_target = opt.policy_actions_in_probe_frame
+        ? Multiply(cumulative, probe_to_ee)
+        : cumulative;
+    const Pose raw_pose = MatrixToPose(ee_target);
     const Pose filtered = LowpassPose(filtered_previous, raw_pose, action_dt, opt);
     samples.push_back(TrajectorySample{(i + 1) * action_dt, filtered});
     filtered_previous = filtered;
@@ -813,7 +826,9 @@ void PrintUsage(const char* argv0) {
       << "  --calibration-z-settle-velocity <m/s> Default: 0.001\n"
       << "  --calibration-orientation-tolerance <rad> Default: 0.01\n"
       << "  --calibration-force-settle-cycles <n> Default: 3\n"
-      << "  --calibration-force-sample-hz <hz>   Default: 30\n";
+      << "  --calibration-force-sample-hz <hz>   Default: 30\n"
+      << "  --policy-actions-in-probe-frame\n"
+      << "  --policy-ee-to-probe-transform <16 comma-separated row-major values>\n";
 }
 
 Options ParseArgs(int argc, char** argv) {
@@ -889,6 +904,10 @@ Options ParseArgs(int argc, char** argv) {
       opt.calibration_force_settle_cycles = std::stoi(require_value(arg));
     } else if (arg == "--calibration-force-sample-hz") {
       opt.calibration_force_sample_hz = std::stod(require_value(arg));
+    } else if (arg == "--policy-actions-in-probe-frame") {
+      opt.policy_actions_in_probe_frame = true;
+    } else if (arg == "--policy-ee-to-probe-transform") {
+      opt.policy_ee_to_probe = ParseMatrix4Csv(require_value(arg));
     } else if (arg == "--help" || arg == "-h") {
       PrintUsage(argv[0]);
       std::exit(0);
@@ -917,6 +936,15 @@ Options ParseArgs(int argc, char** argv) {
       opt.calibration_z_settle_tolerance < 0.0 || opt.calibration_z_settle_velocity < 0.0 ||
       opt.calibration_orientation_tolerance < 0.0 || !std::isfinite(opt.calibration_probe_z_offset)) {
     throw std::runtime_error("Calibration numeric limits must be non-negative, and force tolerance must be positive.");
+  }
+  if (opt.policy_actions_in_probe_frame) {
+    const Matrix4 ee_to_probe = RowMajorArrayToMatrix(opt.policy_ee_to_probe);
+    const double bottom_row_error =
+        std::fabs(ee_to_probe(3, 0)) + std::fabs(ee_to_probe(3, 1)) +
+        std::fabs(ee_to_probe(3, 2)) + std::fabs(ee_to_probe(3, 3) - 1.0);
+    if (bottom_row_error > 1e-9) {
+      throw std::runtime_error("--policy-ee-to-probe-transform must be a rigid 4x4 row-major transform.");
+    }
   }
   return opt;
 }

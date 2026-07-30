@@ -74,6 +74,7 @@ def main() -> None:
     motion = active_motion_config(config, selected_policy_type)
     limits = motion.get("limits", {})
     online_filter = motion.get("online_filter", {})
+    action_reference = motion.get("action_reference", {})
     calibration = config.get("calibration", {})
     orientation_calibration = calibration.get("orientation", {})
     force_calibration = calibration.get("force", {})
@@ -94,6 +95,15 @@ def main() -> None:
     add_flag(command, "--max-rotation-speed", limits.get("max_rotation_speed_radps", 0.35))
     add_flag(command, "--max-rotation-acceleration", limits.get("max_rotation_acceleration_radps2", 0.5))
     add_flag(command, "--ramp-time", motion.get("ramp_time_s", 3.0))
+    if str(action_reference.get("frame", "ee")).lower() in {"probe", "tag"}:
+        command.append("--policy-actions-in-probe-frame")
+        ee_to_probe = action_reference.get("ee_to_probe_transform")
+        if ee_to_probe is None:
+            raise ValueError("motion.action_reference.ee_to_probe_transform is required for probe-frame policy actions.")
+        flat_transform = [str(value) for row in ee_to_probe for value in row]
+        if len(flat_transform) != 16:
+            raise ValueError("motion.action_reference.ee_to_probe_transform must be a 4x4 matrix.")
+        add_flag(command, "--policy-ee-to-probe-transform", ",".join(flat_transform))
 
     if not bool(online_filter.get("enabled", True)):
         command.append("--disable-filter")
