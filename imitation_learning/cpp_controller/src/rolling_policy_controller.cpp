@@ -426,6 +426,30 @@ Matrix4 ArrayToMatrix(const std::array<double, 16>& values) {
   return m;
 }
 
+Matrix4 RowMajorArrayToMatrix(const std::array<double, 16>& values) {
+  Matrix4 matrix;
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      matrix(row, col) = values[static_cast<std::size_t>(row * 4 + col)];
+    }
+  }
+  return matrix;
+}
+
+Matrix4 InvertRigidTransform(const Matrix4& transform) {
+  Matrix4 inverse = Identity();
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      inverse(row, col) = transform(col, row);
+    }
+  }
+  const Vec3 translation{transform(0, 3), transform(1, 3), transform(2, 3)};
+  inverse(0, 3) = -(inverse(0, 0) * translation.x + inverse(0, 1) * translation.y + inverse(0, 2) * translation.z);
+  inverse(1, 3) = -(inverse(1, 0) * translation.x + inverse(1, 1) * translation.y + inverse(1, 2) * translation.z);
+  inverse(2, 3) = -(inverse(2, 0) * translation.x + inverse(2, 1) * translation.y + inverse(2, 2) * translation.z);
+  return inverse;
+}
+
 Matrix4 ActionToMatrix(const Action& action) {
   return PoseToMatrix(Pose{action.translation, action.rotation});
 }
@@ -590,6 +614,23 @@ bool ParseBoolField(const std::string& line, const std::string& key, bool defaul
     return false;
   }
   return default_value;
+}
+
+std::array<double, 16> ParseMatrix4Csv(const std::string& text) {
+  std::array<double, 16> values{};
+  std::stringstream stream(text);
+  std::string token;
+  std::size_t index = 0;
+  while (std::getline(stream, token, ',')) {
+    if (index >= values.size()) {
+      throw std::runtime_error("--policy-ee-to-probe-transform must contain exactly 16 values.");
+    }
+    values[index++] = std::stod(token);
+  }
+  if (index != values.size()) {
+    throw std::runtime_error("--policy-ee-to-probe-transform must contain exactly 16 values.");
+  }
+  return values;
 }
 
 PolicyChunk ParsePolicyChunk(const std::string& line, const Options& opt) {
