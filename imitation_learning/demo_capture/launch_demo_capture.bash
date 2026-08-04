@@ -16,6 +16,8 @@ Options:
   --output-root <dir>      Output root. Default: demo_capture/trials.
   --image-dir <dir>        Override config and use an image-folder source.
   --save-every <n>         Save one frame every n inference requests.
+  --capture-settle-s <sec> Wait before each snapshot. Default: 0.15.
+  --flush-frames <n>       Discard live-camera frames before each snapshot. Default: 8.
   --build                  Build the C++ controller before launching.
   --print-only             Print commands without executing them.
   -h, --help               Show this help.
@@ -31,6 +33,8 @@ TRIAL_ID=""
 OUTPUT_ROOT="${PROJECT_ROOT}/demo_capture/trials"
 IMAGE_DIR=""
 SAVE_EVERY="1"
+CAPTURE_SETTLE_S="0.15"
+FLUSH_FRAMES="8"
 DO_BUILD="0"
 PRINT_ONLY="0"
 
@@ -58,6 +62,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --save-every)
       SAVE_EVERY="${2:?Missing value for --save-every}"
+      shift 2
+      ;;
+    --capture-settle-s)
+      CAPTURE_SETTLE_S="${2:?Missing value for --capture-settle-s}"
+      shift 2
+      ;;
+    --flush-frames)
+      FLUSH_FRAMES="${2:?Missing value for --flush-frames}"
       shift 2
       ;;
     --build)
@@ -143,6 +155,8 @@ SENDER_CMD=(
   --config "${CONFIG_FILE}"
   --output-root "${OUTPUT_ROOT}"
   --save-every "${SAVE_EVERY}"
+  --capture-settle-s "${CAPTURE_SETTLE_S}"
+  --flush-frames "${FLUSH_FRAMES}"
   --wait-for-start
   --start-signal-file "${START_SIGNAL_FILE}"
 )

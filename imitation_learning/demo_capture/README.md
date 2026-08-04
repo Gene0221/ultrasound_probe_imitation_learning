@@ -21,8 +21,9 @@ This keeps the same startup order as `launch_realtime.bash`:
 5. Press Enter once to save `frames/initial_frame.png`, send the ready signal,
    and start online inference.
 6. After each executed action chunk, the controller asks for the next inference;
-   the sender then reads the current ultrasound frame, saves it, runs inference
-   on that same frame, and sends the next action chunk.
+   the sender waits briefly, flushes the live-camera buffer, reads the current
+   ultrasound frame, saves it, runs inference on that same frame, and sends the
+   next action chunk.
 
 Stop the scan manually with `Ctrl+C`. The script then saves
 `frames/final_frame.png` and closes the trial logs.
@@ -49,6 +50,9 @@ demo_capture/trials/trial_001/
     step_0001.png
     step_0002.png
     final_frame.png
+  inference_inputs/
+    input_0001.png
+    input_0002.png
   frame_summary.csv
   inference_log.jsonl
   metadata.json
@@ -56,6 +60,16 @@ demo_capture/trials/trial_001/
 
 Use `--initial-position` and `--final-position` if you want text labels or pose
 notes written into `metadata.json` for the paper table.
+
+`inference_inputs/input_XXXX.png` is saved for every inference request and is
+the exact frame sent into the policy. `frames/step_XXXX.png` is the display
+frame subset controlled by `--save-every`.
+
+If saved frames still look stale, increase the live-camera refresh margin:
+
+```bash
+./demo_capture/launch_demo_capture.bash --trial-id trial_001 --flush-frames 20 --capture-settle-s 0.3
+```
 
 For a dry run using saved ultrasound images:
 

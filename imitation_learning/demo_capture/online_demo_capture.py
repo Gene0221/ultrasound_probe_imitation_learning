@@ -47,6 +47,18 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="Save one scanning frame every N inference requests.",
     )
+    parser.add_argument(
+        "--capture-settle-s",
+        type=float,
+        default=0.15,
+        help="Wait this many seconds before reading a demo snapshot after the controller requests inference.",
+    )
+    parser.add_argument(
+        "--flush-frames",
+        type=int,
+        default=8,
+        help="Discard this many live-camera frames before saving each demo snapshot.",
+    )
     return parser.parse_args()
 
 
@@ -75,6 +87,7 @@ def write_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "step",
         "request_id",
         "timestamp_s",
+        "inference_input_frame",
         "frame_path",
         "action_count",
         "force_safety_ok",
@@ -107,6 +120,8 @@ def main() -> None:
 
     trial_dir = make_trial_dir(args.output_root, args.trial_id)
     frame_dir = trial_dir / "frames"
+    inference_input_dir = trial_dir / "inference_inputs"
+    inference_input_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = trial_dir / "inference_log.jsonl"
     csv_path = trial_dir / "frame_summary.csv"
     metadata_path = trial_dir / "metadata.json"
@@ -135,8 +150,7 @@ def main() -> None:
     print("[INFO] Policy loaded and set to eval mode.", flush=True)
 
     source = build_source(args, config)
-    frame_iter = source.frames()
-    first_image = next(frame_iter)
+    first_image = source.snapshot(settle_s=0.0, flush_frames=args.flush_frames)
     print(f"[INFO] Ultrasound stream ready: first_frame_size={first_image.size}", flush=True)
 
     force_monitor = ForceSafetyMonitor(force_cfg)
@@ -164,7 +178,7 @@ def main() -> None:
     else:
         input("[PROMPT] Finish robot initialization, then press Enter to save the initial ultrasound frame.")
 
-    initial_image = next(frame_iter)
+    initial_image = source.snapshot(settle_s=args.capture_settle_s, flush_frames=args.flush_frames)
     initial_frame = frame_dir / "initial_frame.png"
     save_image(initial_image, initial_frame)
     metadata["initial_frame"] = str(initial_frame.resolve())
@@ -184,7 +198,9 @@ def main() -> None:
             command_type = str(command.get("command", "")).lower()
             request_id = int(command.get("request_id", -1))
             if command_type == "infer":
-                image = next(frame_iter)
+                image = source.snapshot(settle_s=args.capture_settle_s, flush_frames=args.flush_frames)
+                inference_input_path = inference_input_dir / f"input_{seq + 1:04d}.png"
+                save_image(image, inference_input_path)
                 frame_path: Path | None = None
                 if seq % args.save_every == 0:
                     frame_path = frame_dir / f"step_{seq + 1:04d}.png"
@@ -208,6 +224,7 @@ def main() -> None:
                     "calibration_Fz_N": read_force_axis(
                         calibration_force_sample, str(calibration_force_cfg.get("axis", "Fz_N"))
                     ),
+                    "inference_input_frame": str(inference_input_path.resolve()),
                     "saved_frame": str(frame_path.resolve()) if frame_path is not None else "",
                 }
                 if initial_calibration_force is not None:
@@ -219,6 +236,7 @@ def main() -> None:
                         "step": seq + 1,
                         "request_id": request_id,
                         "timestamp_s": payload["timestamp_s"],
+                        "inference_input_frame": payload["inference_input_frame"],
                         "frame_path": payload["saved_frame"],
                         "action_count": len(actions),
                         "force_safety_ok": force_ok,
@@ -247,7 +265,7 @@ def main() -> None:
             else:
                 raise ValueError(f"Unsupported controller command: {command_type!r}")
     except KeyboardInterrupt:
-        final_image = next(frame_iter)
+        final_image = source.snapshot(settle_s=args.capture_settle_s, flush_frames=args.flush_frames)
         final_frame = frame_dir / "final_frame.png"
         save_image(final_image, final_frame)
         metadata["final_frame"] = str(final_frame.resolve())
