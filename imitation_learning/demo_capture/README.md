@@ -20,6 +20,9 @@ This keeps the same startup order as `launch_realtime.bash`:
 4. Wait for the contact force reference and initial EE/probe orientation records.
 5. Press Enter once to save `frames/initial_frame.png`, send the ready signal,
    and start online inference.
+6. After each executed action chunk, the controller asks for the next inference;
+   the sender then reads the current ultrasound frame, saves it, runs inference
+   on that same frame, and sends the next action chunk.
 
 Stop the scan manually with `Ctrl+C`. The script then saves
 `frames/final_frame.png` and closes the trial logs.

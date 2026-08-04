@@ -175,7 +175,6 @@ def main() -> None:
         input("[PROMPT] Press Enter again to start online inference and per-step frame capture.")
 
     seq = 0
-    pending_image = next(frame_iter)
     client.send({"mode": "ready", "timestamp_s": time.time()})
     print("[INFO] Demo capture service ready. Stop manually with Ctrl+C when the scan is finished.", flush=True)
 
@@ -185,7 +184,7 @@ def main() -> None:
             command_type = str(command.get("command", "")).lower()
             request_id = int(command.get("request_id", -1))
             if command_type == "infer":
-                image = pending_image
+                image = next(frame_iter)
                 frame_path: Path | None = None
                 if seq % args.save_every == 0:
                     frame_path = frame_dir / f"step_{seq + 1:04d}.png"
@@ -233,7 +232,6 @@ def main() -> None:
                     flush=True,
                 )
                 seq += 1
-                pending_image = next(frame_iter)
             elif command_type == "force_sample":
                 force_sample = calibration_force_monitor.read() if calibration_force_monitor is not None else force_monitor.read()
                 payload = {
